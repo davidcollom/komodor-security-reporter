@@ -4,6 +4,66 @@ This alerter supports multiple container image vulnerability scanning backends. 
 
 ## Supported Scanners
 
+## Installation Examples
+
+Choose one of the installation models:
+
+- Install scanner CLIs on the host or node image and reference them by PATH.
+- Bundle scanner CLIs in a derived container image.
+- Mount scanner CLIs via an init container or shared volume.
+
+### Trivy
+
+```bash
+# macOS
+brew install trivy
+
+# Alpine
+apk add --no-cache trivy
+
+# Debian/Ubuntu (see Aqua docs for current repo setup)
+trivy --version
+```
+
+Container image example:
+
+```dockerfile
+FROM ghcr.io/davidcollom/komodor-security-reporter:latest
+RUN apk add --no-cache trivy
+```
+
+### Clair (`clairctl`)
+
+```bash
+# Download binary from Clair releases and place on PATH
+clairctl --version
+```
+
+Container image example:
+
+```dockerfile
+FROM ghcr.io/davidcollom/komodor-security-reporter:latest
+# Example only; pin to an explicit version in production
+COPY --from=ghcr.io/quay/clair/clairctl:latest /usr/local/bin/clairctl /usr/local/bin/clairctl
+```
+
+### Snyk
+
+```bash
+# macOS
+brew install snyk
+snyk auth
+```
+
+### Wiz
+
+```bash
+# Install from official Wiz CLI instructions
+wiz auth
+```
+
+For Snyk and Wiz in containers, build a private derived image using your organisation's approved installation/authentication workflow.
+
 ### Trivy (Recommended for most uses)
 
 **Status**: ✅ Enabled by default
@@ -261,7 +321,7 @@ These scanners have Go libraries and could be added in the future:
 
 - **Grype** (Anchore): Lightweight, vulnerability-focused scanner
 - **Syft** (Anchore): SBOM generation (complements Grype)
-- **Clair** (Red Hat): Registry-integrated scanner for Kubernetes
+- **ClamAV-based image checks**: Malware-oriented complement to CVE scanners
 
 ---
 
