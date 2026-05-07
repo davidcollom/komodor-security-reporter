@@ -28,10 +28,11 @@ type rawConfig struct {
 	Scanners struct {
 		Concurrency int `yaml:"concurrency"`
 		Scanners    []struct {
-			Name    string `yaml:"name"`
-			Type    string `yaml:"type"`
-			Enabled bool   `yaml:"enabled"`
-			Command struct {
+			Name      string   `yaml:"name"`
+			Type      string   `yaml:"type"`
+			Enabled   bool     `yaml:"enabled"`
+			Resources []string `yaml:"resources"`
+			Command   struct {
 				Binary  string `yaml:"binary"`
 				Timeout string `yaml:"timeout"`
 			} `yaml:"command"`
@@ -123,9 +124,10 @@ func convertToConfig(raw rawConfig) (*Config, error) {
 		}
 
 		cfg.Scanners.Scanners[i] = ScannerConfig{
-			Name:    s.Name,
-			Type:    s.Type,
-			Enabled: s.Enabled,
+			Name:      s.Name,
+			Type:      s.Type,
+			Enabled:   s.Enabled,
+			Resources: append([]string(nil), s.Resources...),
 			Command: CommandConfig{
 				Binary:  s.Command.Binary,
 				Timeout: timeout,

@@ -5,5 +5,6 @@ import (
 	_ "github.com/davidcollom/komodor-security-reporter/internal/scanners/clair"
 	_ "github.com/davidcollom/komodor-security-reporter/internal/scanners/snyk"
 	_ "github.com/davidcollom/komodor-security-reporter/internal/scanners/trivy"
+	_ "github.com/davidcollom/komodor-security-reporter/internal/scanners/trivyoperator"
 	_ "github.com/davidcollom/komodor-security-reporter/internal/scanners/wiz"
 )

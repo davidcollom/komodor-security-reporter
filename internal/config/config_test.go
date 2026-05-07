@@ -244,6 +244,30 @@ func TestValidateConfig(t *testing.T) {
 			},
 			wantError: true,
 		},
+		{
+			name: "trivy-operator resources cannot include empty values",
+			config: &Config{
+				ClusterName: "test",
+				Workloads: WorkloadsConfig{
+					Kinds: []string{"Deployment"},
+				},
+				Scanners: ScannersConfig{
+					Concurrency: 1,
+					Scanners: []ScannerConfig{{
+						Name:      "trivy-operator",
+						Type:      "trivy-operator",
+						Enabled:   true,
+						Resources: []string{"vulnerabilityreports", ""},
+					}},
+				},
+				State: StateConfig{TTL: 72 * time.Hour},
+				Komodor: KomodorConfig{
+					Enabled: true,
+					BaseURL: "https://app.komodor.io",
+				},
+			},
+			wantError: true,
+		},
 	}
 
 	for _, tt := range tests {

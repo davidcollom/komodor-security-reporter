@@ -20,7 +20,7 @@ func TestCreateScannerRegistryDefaultsBinaryToScannerType(t *testing.T) {
 
 	var gotBinary string
 
-	RegisterScanner(scannerType, func(name string, binaryPath string, log logrus.FieldLogger) (Scanner, error) {
+	RegisterScanner(scannerType, func(scannerCfg config.ScannerConfig, binaryPath string, log logrus.FieldLogger) (Scanner, error) {
 		gotBinary = binaryPath
 		return &testScanner{}, nil
 	})

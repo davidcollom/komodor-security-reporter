@@ -64,6 +64,17 @@ wiz auth
 
 For Snyk and Wiz in containers, build a private derived image using your organisation's approved installation/authentication workflow.
 
+### Trivy Operator
+
+```bash
+# Install Trivy Operator in-cluster (example with Helm)
+helm repo add aqua https://aquasecurity.github.io/helm-charts/
+helm repo update
+helm upgrade --install trivy-operator aqua/trivy-operator -n trivy-system --create-namespace
+```
+
+This mode reuses in-cluster `VulnerabilityReport` CRDs instead of running a CLI scan for each image.
+
 ### Trivy (Recommended for most uses)
 
 **Status**: ✅ Enabled by default
@@ -240,6 +251,43 @@ brew install snyk  # macOS
 
 ---
 
+### Trivy Operator Reports (Kubernetes-native)
+
+**Status**: ⚠️ Available, requires Trivy Operator CRDs in cluster
+
+**What it is**: Uses Trivy Operator report CRDs (`aquasecurity.github.io/v1alpha1`) as the vulnerability data source.
+
+**Behaviour**:
+
+- Does not run local scanner binaries for image scans.
+- Reads existing reports from the cluster and normalises findings.
+- Can be enabled alongside CLI scanners (for example, Trivy CLI + Trivy Operator).
+
+**Requirements**:
+
+- Trivy Operator installed and producing report CRDs.
+- Kubernetes API access for selected report resources.
+
+**Configuration**:
+
+```yaml
+- name: trivy-operator
+  type: trivy-operator
+  enabled: false
+  resources:
+    - vulnerabilityreports
+    # - clustervulnerabilityreports
+```
+
+Supported resources:
+
+- `vulnerabilityreports`
+- `clustervulnerabilityreports`
+
+**Operational note**: this scanner reads reports only; if reports are stale or missing, results will be stale or empty.
+
+---
+
 ## Recommended Configuration
 
 ### For Kubernetes clusters (default)
@@ -311,6 +359,22 @@ scanners:
       enabled: true
       command:
         timeout: 5m
+
+### For clusters already running Trivy Operator
+
+Use Trivy CLI plus Trivy Operator report ingestion:
+
+```yaml
+scanners:
+  concurrency: 4
+  scanners:
+    - name: trivy
+      type: trivy
+      enabled: true
+    - name: trivy-operator
+      type: trivy-operator
+      enabled: true
+```
 ```
 
 ---

@@ -212,3 +212,28 @@ komodor:
 	require.Equal(t, "", cfg.Scanners.Scanners[0].Command.Binary)
 	require.Equal(t, 10*time.Second, cfg.Scanners.Scanners[0].Command.Timeout)
 }
+
+func TestLoadFromBytesParsesScannerResources(t *testing.T) {
+	yaml := []byte(`
+clusterName: test
+workloads:
+  kinds:
+    - Deployment
+scanners:
+  scanners:
+    - name: trivy-operator
+      type: trivy-operator
+      enabled: true
+      resources:
+        - vulnerabilityreports
+        - clustervulnerabilityreports
+komodor:
+  enabled: true
+  baseURL: https://app.komodor.io
+`)
+
+	cfg, err := LoadFromBytes(yaml)
+
+	require.NoError(t, err)
+	require.Equal(t, []string{"vulnerabilityreports", "clustervulnerabilityreports"}, cfg.Scanners.Scanners[0].Resources)
+}
