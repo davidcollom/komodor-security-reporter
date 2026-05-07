@@ -1,4 +1,4 @@
-.PHONY: help test build lint fmt clean docker-build install-tools coverage
+.PHONY: help test build lint fmt clean docker-build install-tools coverage bench bench-report bench-reconcile bench-reconcile-smoke bench-reconcile-report
 
 help: ## Show this help message
 	@echo "Available targets:"
@@ -32,6 +32,28 @@ coverage: ## Run tests with coverage
 test-short: ## Run short tests only
 	@echo "Running short tests..."
 	go test -short -v ./...
+
+bench: ## Run all benchmark functions without running normal tests
+	@echo "Running all benchmarks..."
+	go test -run '^$$' -bench . -benchmem -benchtime=1x ./...
+
+bench-report: ## Generate repo-wide benchmark report output
+	@echo "Generating benchmark report..."
+	mkdir -p docs/benchmarks/results
+	go test -run '^$$' -bench . -benchmem -benchtime=1x -count=3 ./... | tee docs/benchmarks/results/latest.txt
+
+bench-reconcile: ## Run reconciler benchmark suite
+	@echo "Running reconciler benchmarks..."
+	go test -run '^$$' -bench BenchmarkReconcileAllScenarios -benchmem ./internal/reconciler
+
+bench-reconcile-smoke: ## Run quick benchmark smoke checks
+	@echo "Running reconciler benchmark smoke checks..."
+	go test -run '^$$' -short -bench BenchmarkReconcileAllScenarios -benchmem -benchtime=1x ./internal/reconciler
+
+bench-reconcile-report: ## Generate benchmark report output
+	@echo "Generating reconciler benchmark report..."
+	mkdir -p docs/benchmarks/results
+	go test -run '^$$' -bench BenchmarkReconcileAllScenarios -benchmem -benchtime=1x -count=3 ./internal/reconciler | tee docs/benchmarks/results/latest.txt
 
 build: ## Build the application
 	@echo "Building..."

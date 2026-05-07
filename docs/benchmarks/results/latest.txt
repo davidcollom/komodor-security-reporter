@@ -1,0 +1,12 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/davidcollom/komodor-security-reporter/internal/reconciler
+cpu: Apple M4 Max
+BenchmarkReconcileAllScenarios/small-mix-no-failures-14         	       1	  20661416 ns/op	        20.66 ms/reconcile	     14520 scans/s	      7260 workloads/s	10976416 B/op	   91937 allocs/op
+BenchmarkReconcileAllScenarios/small-mix-no-failures-14         	       1	  18524500 ns/op	        18.52 ms/reconcile	     16195 scans/s	      8097 workloads/s	11209096 B/op	   91893 allocs/op
+BenchmarkReconcileAllScenarios/small-mix-no-failures-14         	       1	  17180459 ns/op	        17.18 ms/reconcile	     17462 scans/s	      8731 workloads/s	11095160 B/op	   91776 allocs/op
+BenchmarkReconcileAllScenarios/large-mix-with-failures-14       	       1	  97883375 ns/op	        97.88 ms/reconcile	     21454 scans/s	      7151 workloads/s	73730128 B/op	  651229 allocs/op
+BenchmarkReconcileAllScenarios/large-mix-with-failures-14       	       1	  92494625 ns/op	        92.49 ms/reconcile	     22705 scans/s	      7568 workloads/s	73872656 B/op	  651227 allocs/op
+BenchmarkReconcileAllScenarios/large-mix-with-failures-14       	       1	  92510291 ns/op	        92.51 ms/reconcile	     22700 scans/s	      7567 workloads/s	73733088 B/op	  651026 allocs/op
+PASS
+ok  	github.com/davidcollom/komodor-security-reporter/internal/reconciler	0.918s

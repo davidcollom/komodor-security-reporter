@@ -1,0 +1,34 @@
+name: Benchmark Suite
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark-all:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: Run benchmark suite
+        run: |
+          set -euo pipefail
+          go test -run '^$' -bench . -benchmem -benchtime=1x ./... | tee benchmark-suite.txt
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-suite-output
+          path: benchmark-suite.txt
