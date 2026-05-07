@@ -25,25 +25,14 @@ type reportResource struct {
 	namespaced bool
 }
 
-var supportedResources = map[string]reportResource{
-	"vulnerabilityreports": {
-		name: "vulnerabilityreports",
-		gvr: schema.GroupVersionResource{
-			Group:    "aquasecurity.github.io",
-			Version:  "v1alpha1",
-			Resource: "vulnerabilityreports",
-		},
-		namespaced: true,
-	},
-	"clustervulnerabilityreports": {
-		name: "clustervulnerabilityreports",
-		gvr: schema.GroupVersionResource{
-			Group:    "aquasecurity.github.io",
-			Version:  "v1alpha1",
-			Resource: "clustervulnerabilityreports",
-		},
-		namespaced: false,
-	},
+type resourceExtractor struct {
+	resource reportResource
+	extract  func(report *unstructured.Unstructured, image scanners.ImageRef) ([]scanners.Finding, bool)
+}
+
+var supportedResources = map[string]resourceExtractor{
+	"vulnerabilityreports":        vulnerabilityReportsExtractor,
+	"clustervulnerabilityreports": clusterVulnerabilityReportsExtractor,
 }
 
 var defaultResourceNames = []string{"vulnerabilityreports"}
@@ -115,7 +104,7 @@ func newScannerFactory(scannerCfg config.ScannerConfig, _ string, log logrus.Fie
 // Scanner reads vulnerability data from Trivy Operator VulnerabilityReport CRDs.
 type Scanner struct {
 	reportLister reportLister
-	resources    []reportResource
+	resources    []resourceExtractor
 	log          logrus.FieldLogger
 }
 
@@ -140,19 +129,45 @@ func (s *Scanner) Name() string {
 
 // Scan looks up matching VulnerabilityReport CRDs and normalises the findings.
 func (s *Scanner) Scan(ctx context.Context, image scanners.ImageRef) (*scanners.ScanResult, error) {
-	allReports := make([]unstructured.Unstructured, 0)
+	seen := make(map[string]struct{})
+	findings := make([]scanners.Finding, 0)
 
 	for _, resource := range s.resources {
-		reports, err := s.reportLister.List(ctx, resource)
+		reports, err := s.reportLister.List(ctx, resource.resource)
 		if err != nil {
-			return nil, fmt.Errorf("list trivy operator resource %s: %w", resource.name, err)
+			return nil, fmt.Errorf("list trivy operator resource %s: %w", resource.resource.name, err)
 		}
 
-		allReports = append(allReports, reports...)
+		for i := range reports {
+			report := &reports[i]
+
+			reportFindings, matched := resource.extract(report, image)
+			if !matched {
+				continue
+			}
+
+			for i := range reportFindings {
+				finding := &reportFindings[i]
+
+				fingerprint := findingFingerprint(*finding)
+				if _, exists := seen[fingerprint]; exists {
+					continue
+				}
+
+				seen[fingerprint] = struct{}{}
+
+				findings = append(findings, *finding)
+			}
+		}
 	}
 
-	matched := filterReportsForImage(allReports, image)
-	findings := findingsFromReports(matched)
+	sort.Slice(findings, func(i, j int) bool {
+		if findings[i].Severity.Rank() != findings[j].Severity.Rank() {
+			return findings[i].Severity.Rank() > findings[j].Severity.Rank()
+		}
+
+		return findings[i].ID < findings[j].ID
+	})
 
 	result := &scanners.ScanResult{
 		Scanner:   s.Name(),
@@ -165,12 +180,12 @@ func (s *Scanner) Scan(ctx context.Context, image scanners.ImageRef) (*scanners.
 	return result, nil
 }
 
-func resolveResources(configured []string) ([]reportResource, error) {
+func resolveResources(configured []string) ([]resourceExtractor, error) {
 	if len(configured) == 0 {
 		configured = defaultResourceNames
 	}
 
-	resources := make([]reportResource, 0, len(configured))
+	resources := make([]resourceExtractor, 0, len(configured))
 	for _, resourceName := range configured {
 		key := strings.ToLower(strings.TrimSpace(resourceName))
 
@@ -183,137 +198,6 @@ func resolveResources(configured []string) ([]reportResource, error) {
 	}
 
 	return resources, nil
-}
-
-func filterReportsForImage(reports []unstructured.Unstructured, image scanners.ImageRef) []unstructured.Unstructured {
-	filtered := make([]unstructured.Unstructured, 0)
-
-	for i := range reports {
-		report := &reports[i]
-
-		if reportMatchesImage(report, image) {
-			filtered = append(filtered, *report)
-		}
-	}
-
-	return filtered
-}
-
-func reportMatchesImage(report *unstructured.Unstructured, image scanners.ImageRef) bool {
-	repository, _, _ := unstructured.NestedString(report.Object, "report", "artifact", "repository")
-	tag, _, _ := unstructured.NestedString(report.Object, "report", "artifact", "tag")
-	registry, _, _ := unstructured.NestedString(report.Object, "report", "registry", "server")
-
-	if repository == "" || repository != image.Repository {
-		return false
-	}
-
-	if image.Tag != "" && tag != "" && tag != image.Tag {
-		return false
-	}
-
-	if registry != "" && !sameRegistry(registry, image.Registry) {
-		return false
-	}
-
-	return true
-}
-
-func sameRegistry(a, b string) bool {
-	normalise := func(value string) string {
-		value = strings.ToLower(strings.TrimSpace(value))
-		switch value {
-		case "docker.io", "index.docker.io", "registry-1.docker.io":
-			return "docker.io"
-		default:
-			return value
-		}
-	}
-
-	if b == "" {
-		return true
-	}
-
-	return normalise(a) == normalise(b)
-}
-
-func findingsFromReports(reports []unstructured.Unstructured) []scanners.Finding {
-	seen := make(map[string]struct{})
-	findings := make([]scanners.Finding, 0)
-
-	for i := range reports {
-		report := &reports[i]
-
-		vulns, found, _ := unstructured.NestedSlice(report.Object, "report", "vulnerabilities")
-		if !found {
-			continue
-		}
-
-		for _, raw := range vulns {
-			vuln, ok := raw.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			finding := findingFromVulnerability(vuln)
-
-			fingerprint := findingFingerprint(finding)
-			if _, exists := seen[fingerprint]; exists {
-				continue
-			}
-
-			seen[fingerprint] = struct{}{}
-
-			findings = append(findings, finding)
-		}
-	}
-
-	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].Severity.Rank() != findings[j].Severity.Rank() {
-			return findings[i].Severity.Rank() > findings[j].Severity.Rank()
-		}
-
-		return findings[i].ID < findings[j].ID
-	})
-
-	return findings
-}
-
-func findingFromVulnerability(vuln map[string]interface{}) scanners.Finding {
-	id, _ := vuln["vulnerabilityID"].(string)
-	severityText, _ := vuln["severity"].(string)
-	resource, _ := vuln["resource"].(string)
-	installedVersion, _ := vuln["installedVersion"].(string)
-	fixedVersion, _ := vuln["fixedVersion"].(string)
-	title, _ := vuln["title"].(string)
-	primaryLink, _ := vuln["primaryLink"].(string)
-
-	severity, err := scanners.ParseSeverity(severityText)
-	if err != nil {
-		severity = scanners.SeverityUnknown
-	}
-
-	finding := scanners.Finding{
-		ID:          id,
-		CVE:         normaliseCVE(id),
-		Package:     resource,
-		Installed:   installedVersion,
-		Fixed:       fixedVersion,
-		Severity:    severity,
-		Title:       title,
-		URL:         primaryLink,
-		Exploitable: false,
-	}
-
-	return finding
-}
-
-func normaliseCVE(id string) string {
-	if strings.HasPrefix(strings.ToUpper(id), "CVE-") {
-		return id
-	}
-
-	return ""
 }
 
 func findingFingerprint(finding scanners.Finding) string {
