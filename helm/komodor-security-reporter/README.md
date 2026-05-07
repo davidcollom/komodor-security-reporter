@@ -10,7 +10,7 @@ Kubernetes-native image vulnerability watcher for Komodor
 
 | Name | Email | Url |
 | ---- | ------ | --- |
-| David Collom | <david@example.com> |  |
+| David Collom | <david@collom.co.uk> |  |
 
 ## Source Code
 

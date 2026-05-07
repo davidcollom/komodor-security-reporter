@@ -92,7 +92,7 @@ repos:
       - id: helm-lint
       - id: helm-unittest
         args:
-          - helm/komodor-security-alerter
+          - helm/komodor-security-reporter
 
 
   - repo: https://github.com/TekWizely/pre-commit-golang
