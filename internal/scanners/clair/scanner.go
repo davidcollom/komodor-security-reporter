@@ -17,7 +17,15 @@ func init() {
 }
 
 func newScannerFactory(name string, binary string, log logrus.FieldLogger) (scanners.Scanner, error) {
-	return NewScanner(binary, log), nil
+	return NewScanner(defaultBinary(binary), log), nil
+}
+
+func defaultBinary(binary string) string {
+	if binary == "" || binary == "clair" {
+		return "clairctl"
+	}
+
+	return binary
 }
 
 // Scanner implements the scanners.Scanner interface for Clair CLI.
@@ -84,13 +92,7 @@ func parseResult(data []byte, image scanners.ImageRef) (*scanners.ScanResult, er
 		sev := parseSeverityOrUnknown(vuln)
 		incrementSummary(&result.Summary, sev)
 
-		id := firstNonEmpty(
-			toString(vuln["id"]),
-			toString(vuln["vulnerability"]),
-			toString(vuln["vulnerabilityId"]),
-			toString(vuln["name"]),
-			toString(vuln["title"]),
-		)
+		id := vulnIdentity(vuln)
 
 		cve := firstCVE(vuln)
 		if cve == "" && strings.HasPrefix(strings.ToUpper(id), "CVE-") {
@@ -198,15 +200,19 @@ func looksLikeVulnerability(v map[string]interface{}) bool {
 		return false
 	}
 
-	hasIdentity := firstNonEmpty(
+	hasIdentity := vulnIdentity(v) != ""
+
+	return hasIdentity
+}
+
+func vulnIdentity(v map[string]interface{}) string {
+	return firstNonEmpty(
 		toString(v["id"]),
 		toString(v["vulnerability"]),
 		toString(v["vulnerabilityId"]),
 		toString(v["name"]),
 		toString(v["title"]),
-	) != ""
-
-	return hasIdentity
+	)
 }
 
 func dedupeByFingerprint(vulns []map[string]interface{}) []map[string]interface{} {
@@ -215,11 +221,7 @@ func dedupeByFingerprint(vulns []map[string]interface{}) []map[string]interface{
 	out := make([]map[string]interface{}, 0, len(vulns))
 	for _, vuln := range vulns {
 		key := strings.Join([]string{
-			firstNonEmpty(
-				toString(vuln["id"]),
-				toString(vuln["vulnerability"]),
-				toString(vuln["vulnerabilityId"]),
-			),
+			vulnIdentity(vuln),
 			firstNonEmpty(
 				toString(vuln["package"]),
 				toString(vuln["packageName"]),

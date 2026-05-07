@@ -44,11 +44,22 @@ func TestParseResult(t *testing.T) {
 	require.Len(t, result.Findings, 2)
 	require.Equal(t, 1, result.Summary.Critical)
 	require.Equal(t, 1, result.Summary.High)
-	require.Equal(t, "CVE-2026-3000", result.Findings[0].CVE)
-	require.Equal(t, "openssl", result.Findings[0].Package)
-	require.Equal(t, scanners.SeverityHigh, result.Findings[0].Severity)
-	require.Equal(t, "2.35-r1", result.Findings[1].Fixed)
-	require.Equal(t, scanners.SeverityCritical, result.Findings[1].Severity)
+
+	byID := map[string]scanners.Finding{}
+	for _, finding := range result.Findings {
+		byID[finding.ID] = finding
+	}
+
+	first, ok := byID["CVE-2026-3000"]
+	require.True(t, ok)
+	require.Equal(t, "CVE-2026-3000", first.CVE)
+	require.Equal(t, "openssl", first.Package)
+	require.Equal(t, scanners.SeverityHigh, first.Severity)
+
+	second, ok := byID["CLAIR-2"]
+	require.True(t, ok)
+	require.Equal(t, "2.35-r1", second.Fixed)
+	require.Equal(t, scanners.SeverityCritical, second.Severity)
 }
 
 func TestParseResultDedupe(t *testing.T) {
@@ -82,7 +93,39 @@ func TestParseResultInvalidJSON(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseResultDedupeUsesNameFallbackIdentity(t *testing.T) {
+	sampleOutput := []byte(`{
+	  "report": {
+	    "vulnerabilities": [
+	      {
+	        "name": "CVE-2026-3000",
+	        "severity": "high",
+	        "package": "openssl",
+	        "version": "1.1.1"
+	      },
+	      {
+	        "name": "CVE-2026-3000",
+	        "severity": "high",
+	        "package": "openssl",
+	        "version": "1.1.1"
+	      }
+	    ]
+	  }
+	}`)
+
+	result, err := parseResult(sampleOutput, scanners.ImageRef{})
+	require.NoError(t, err)
+	require.Len(t, result.Findings, 1)
+	require.Equal(t, 1, result.Summary.High)
+}
+
 func TestScannerName(t *testing.T) {
 	s := NewScanner("clairctl", logrus.New())
 	require.Equal(t, "clair", s.Name())
+}
+
+func TestDefaultBinary(t *testing.T) {
+	require.Equal(t, "clairctl", defaultBinary(""))
+	require.Equal(t, "clairctl", defaultBinary("clair"))
+	require.Equal(t, "/usr/local/bin/clairctl", defaultBinary("/usr/local/bin/clairctl"))
 }
