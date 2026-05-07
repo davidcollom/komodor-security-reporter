@@ -115,6 +115,7 @@ brew install snyk  # macOS
   type: clair
   enabled: false
   command:
+    binary: clairctl
     timeout: 5m
 ```
 

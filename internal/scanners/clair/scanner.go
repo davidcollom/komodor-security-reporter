@@ -89,6 +89,7 @@ func parseResult(data []byte, image scanners.ImageRef) (*scanners.ScanResult, er
 			toString(vuln["vulnerability"]),
 			toString(vuln["vulnerabilityId"]),
 			toString(vuln["name"]),
+			toString(vuln["title"]),
 		)
 
 		cve := firstCVE(vuln)
