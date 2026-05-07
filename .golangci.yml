@@ -1,0 +1,41 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - misspell
+    - unused
+    - gocritic
+    - revive
+    - staticcheck
+    - unconvert
+    - whitespace
+    - wsl_v5
+    - godot
+
+  settings:
+    revive:
+      confidence: 0.8
+      rules:
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: exported
+
+    gocritic:
+      enabled-checks:
+        - rangeValCopy
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - gosec
+
+formatters:
+  enable:
+    - gofumpt

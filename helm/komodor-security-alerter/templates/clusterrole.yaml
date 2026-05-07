@@ -1,0 +1,52 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "komodor-security-reporter.fullname" . }}
+  labels:
+    {{- include "komodor-security-reporter.labels" . | nindent 4 }}
+rules:
+  # Read namespaces
+  - apiGroups: [""]
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Read workloads
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Read jobs
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Manage state ConfigMap
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    resourceNames:
+      - {{ include "komodor-security-reporter.fullname" . }}-state
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - patch
+{{- end }}

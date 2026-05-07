@@ -1,0 +1,128 @@
+---
+# yaml-language-server: $schema=values.schema.json
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/davidcollom/komodor-security-reporter
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+rbac:
+  create: true
+  scope: cluster  # cluster or namespace
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65534
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Configuration
+config:
+  clusterName: "cluster-1"
+
+  namespaces:
+    include:
+      - production
+      - platform
+    exclude:
+      - kube-system
+      - kube-node-lease
+
+  workloads:
+    kinds:
+      - Deployment
+      - StatefulSet
+      - DaemonSet
+      - Job
+      - CronJob
+
+  registry:
+    resolveDigest: true
+
+  scanners:
+    scanners:
+      - name: trivy
+        type: trivy
+        enabled: true
+        command:
+          binary: /usr/local/bin/trivy
+          timeout: 5m
+
+  publishing:
+    minimumSeverity: high
+    includeTopFindings: 5
+    publishCleanScans: false
+    dedupeTTL: 24h
+
+  komodor:
+    enabled: true
+    baseURL: https://app.komodor.io
+
+# Komodor credentials
+komodor:
+  # Set to true to create a Secret for Komodor API key
+  createSecret: false
+  secretName: komodor-credentials
+  # Set this if creating the secret
+  # apiKey: your-api-key-here
+
+# Logging
+logging:
+  level: info
+
+# Metrics
+metrics:
+  enabled: true
+  port: 8080
+
+# Persistence
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClassName: ""
+  # If you want to use an existing PVC
+  existingClaim: ""

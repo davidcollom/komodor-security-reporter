@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "komodor-security-reporter.fullname" . }}
+  labels:
+    {{- include "komodor-security-reporter.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- $config := .Values.config }}
+    clusterName: {{ $config.clusterName | quote }}
+
+    namespaces:
+      include:
+        {{- range $config.namespaces.include }}
+        - {{ . | quote }}
+        {{- end }}
+      exclude:
+        {{- range $config.namespaces.exclude }}
+        - {{ . | quote }}
+        {{- end }}
+
+    workloads:
+      kinds:
+        {{- range $config.workloads.kinds }}
+        - {{ . | quote }}
+        {{- end }}
+
+    registry:
+      resolveDigest: {{ $config.registry.resolveDigest }}
+
+    scanners:
+      scanners:
+        {{- range $config.scanners.scanners }}
+        - name: {{ .name | quote }}
+          type: {{ .type | quote }}
+          enabled: {{ .enabled }}
+          command:
+            binary: {{ .command.binary | quote }}
+            timeout: {{ .command.timeout | quote }}
+        {{- end }}
+
+    publishing:
+      minimumSeverity: {{ $config.publishing.minimumSeverity | quote }}
+      includeTopFindings: {{ $config.publishing.includeTopFindings }}
+      publishCleanScans: {{ $config.publishing.publishCleanScans }}
+      dedupeTTL: {{ $config.publishing.dedupeTTL | quote }}
+
+    komodor:
+      enabled: {{ $config.komodor.enabled }}
+      baseURL: {{ $config.komodor.baseURL | quote }}

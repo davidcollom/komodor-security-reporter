@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # required for creating releases and uploading release assets
+      packages: write # required for uploading release artifacts to GitHub Packages
+      id-token: write # required for cosign keyless signing
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign Release Artifacts (keyless)
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' artifact; do
+            cosign sign-blob --yes --output-signature "${artifact}.sig" "${artifact}"
+          done < <(find dist -maxdepth 1 -type f ! -name '*.sig' -print0)
+
+      - name: Upload Artifact Signatures to Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          sigs=(dist/*.sig)
+          if [ "${#sigs[@]}" -gt 0 ]; then
+            gh release upload "${GITHUB_REF_NAME}" "${sigs[@]}" --clobber
+          fi
+
+      - name: Sign Container Images (keyless)
+        run: |
+          set -euo pipefail
+          for tag in \
+            "ghcr.io/davidcollom/komodor-security-reporter:${GITHUB_REF_NAME}-amd64" \
+            "ghcr.io/davidcollom/komodor-security-reporter:${GITHUB_REF_NAME}-arm64" \
+            "ghcr.io/davidcollom/komodor-security-reporter:latest-amd64" \
+            "ghcr.io/davidcollom/komodor-security-reporter:latest-arm64"; do
+            cosign sign --yes "${tag}"
+          done
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: goreleaser-dist
+          path: dist/
