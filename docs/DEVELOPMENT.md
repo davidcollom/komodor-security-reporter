@@ -371,6 +371,23 @@ case "newscanner":
 - May need to migrate to PVC for larger states
 - Consider pruning old entries
 
+### Benchmark Harness
+
+Use the reconciler benchmark suite for workload-scale and scanner-mix performance checks:
+
+```bash
+# Quick CI-style smoke check
+make bench-reconcile-smoke
+
+# Full benchmark run
+make bench-reconcile
+
+# Generate reproducible baseline output
+make bench-reconcile-report
+```
+
+Benchmark docs and version-tracked outputs are under `docs/benchmarks/`.
+
 ## Common Tasks
 
 ### Viewing Test Coverage
