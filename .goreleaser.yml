@@ -79,3 +79,10 @@ release:
   name_template: "Release {{ .Version }}"
   draft: false
   mode: replace
+  footer: |
+    ## Container image
+
+    Pull the published image using one of the tags below:
+
+    - ghcr.io/davidcollom/komodor-security-reporter:{{ .Version }}
+    - ghcr.io/davidcollom/komodor-security-reporter:latest
