@@ -10,6 +10,24 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      goreleaser: ${{ steps.filter.outputs.goreleaser }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Detect GoReleaser-related changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            goreleaser:
+              - .goreleaser.yml
+              - .goreleaser.yaml
+              - Dockerfile
+              - .github/workflows/release.yml
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -70,3 +88,18 @@ jobs:
             gofmt -s -d .
             exit 1
           fi
+
+  goreleaser-check:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.goreleaser == 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run GoReleaser check
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: latest
+          args: check
