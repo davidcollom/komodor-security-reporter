@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/davidcollom/komodor-security-reporter/internal/config"
@@ -36,6 +37,8 @@ var supportedResources = map[string]resourceExtractor{
 }
 
 var defaultResourceNames = []string{"vulnerabilityreports"}
+
+const defaultReportCacheTTL = 30 * time.Second
 
 func init() {
 	scanners.RegisterScanner("trivy-operator", newScannerFactory)
@@ -106,6 +109,15 @@ type Scanner struct {
 	reportLister reportLister
 	resources    []resourceExtractor
 	log          logrus.FieldLogger
+	cacheTTL     time.Duration
+	now          func() time.Time
+	cacheMu      sync.RWMutex
+	cache        map[string]cachedReports
+}
+
+type cachedReports struct {
+	reports  []unstructured.Unstructured
+	loadedAt time.Time
 }
 
 // NewScanner creates a scanner backed by Trivy Operator reports.
@@ -119,6 +131,9 @@ func NewScanner(reportLister reportLister, configuredResources []string, log log
 		reportLister: reportLister,
 		resources:    resources,
 		log:          log,
+		cacheTTL:     defaultReportCacheTTL,
+		now:          time.Now,
+		cache:        make(map[string]cachedReports, len(resources)),
 	}, nil
 }
 
@@ -133,7 +148,7 @@ func (s *Scanner) Scan(ctx context.Context, image scanners.ImageRef) (*scanners.
 	findings := make([]scanners.Finding, 0)
 
 	for _, resource := range s.resources {
-		reports, err := s.reportLister.List(ctx, resource.resource)
+		reports, err := s.listReports(ctx, resource.resource)
 		if err != nil {
 			return nil, fmt.Errorf("list trivy operator resource %s: %w", resource.resource.name, err)
 		}
@@ -172,12 +187,48 @@ func (s *Scanner) Scan(ctx context.Context, image scanners.ImageRef) (*scanners.
 	result := &scanners.ScanResult{
 		Scanner:   s.Name(),
 		Image:     image,
-		ScannedAt: time.Now().UTC(),
+		ScannedAt: s.now().UTC(),
 		Summary:   summaryFromFindings(findings),
 		Findings:  findings,
 	}
 
 	return result, nil
+}
+
+func (s *Scanner) listReports(ctx context.Context, resource reportResource) ([]unstructured.Unstructured, error) {
+	if reports, ok := s.cachedReports(resource.name); ok {
+		return reports, nil
+	}
+
+	reports, err := s.reportLister.List(ctx, resource)
+	if err != nil {
+		return nil, err
+	}
+
+	s.cacheMu.Lock()
+	s.cache[resource.name] = cachedReports{
+		reports:  reports,
+		loadedAt: s.now(),
+	}
+	s.cacheMu.Unlock()
+
+	return reports, nil
+}
+
+func (s *Scanner) cachedReports(resourceName string) ([]unstructured.Unstructured, bool) {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+
+	cached, ok := s.cache[resourceName]
+	if !ok {
+		return nil, false
+	}
+
+	if s.now().Sub(cached.loadedAt) > s.cacheTTL {
+		return nil, false
+	}
+
+	return cached.reports, true
 }
 
 func resolveResources(configured []string) ([]resourceExtractor, error) {
