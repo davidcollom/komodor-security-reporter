@@ -10,9 +10,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
 
@@ -20,7 +20,7 @@ jobs:
         run: go test -v -race -coverprofile=coverage.out ./...
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage.out
           verbose: true
@@ -28,13 +28,13 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
 
-      - uses: golangci/golangci-lint-action@v3
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           args: --config=.golangci.yml
@@ -42,9 +42,9 @@ jobs:
   vet:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
 
@@ -54,9 +54,9 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
 
