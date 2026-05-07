@@ -46,6 +46,13 @@ scanners:
     #     # Wiz requires CLI binary. Omit binary to use system PATH, or set absolute path.
     #     # binary: /opt/homebrew/bin/wizcli
     #     timeout: 5m
+    # - name: clair
+    #   type: clair
+    #   enabled: false
+    #   command:
+    #     # Clair requires clairctl CLI. Omit binary to use system PATH, or set absolute path.
+    #     # binary: /opt/homebrew/bin/clairctl
+    #     timeout: 5m
 
 publishing:
   minimumSeverity: high

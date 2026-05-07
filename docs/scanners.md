@@ -87,6 +87,39 @@ brew install snyk  # macOS
 
 ---
 
+### Clair
+
+**Status**: ⚠️ Available, requires Clair CLI
+
+**What it is**: Open-source container vulnerability analysis from the Quay ecosystem.
+
+**Binary**: Requires `clairctl` binary to be installed.
+
+**Requirements**:
+
+- Requires access to a configured Clair instance
+- CLI must be installed separately
+
+**Strengths**:
+
+- Open-source scanner ecosystem
+- Good fit for organizations already running Clair
+- Structured JSON output suitable for normalization
+
+**Performance**: Depends on Clair deployment and registry latency.
+
+**Configuration**:
+
+```yaml
+- name: clair
+  type: clair
+  enabled: false
+  command:
+    timeout: 5m
+```
+
+---
+
 ### Wiz Container Scanner
 
 **Status**: ⚠️ Available, enterprise-focused
@@ -132,17 +165,17 @@ brew install snyk  # macOS
 
 ## Comparison
 
-| Feature | Trivy | Snyk | Wiz |
-| --------- | ------- | ------ | ----- |
-| **Speed** | Very Fast | Medium | Medium |
-| **Open Source** | ✅ Yes | ❌ Commercial | ❌ Commercial |
-| **Cost** | Free | Freemium/Paid | Enterprise |
-| **Authentication** | None | Required | Required |
-| **Fix Recommendations** | Limited | ✅ Excellent | ⚠️ Basic |
-| **IaC Scanning** | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Secrets Detection** | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Multi-Cloud** | ⚠️ Limited | ⚠️ Limited | ✅ Excellent |
-| **Easy to Deploy** | ✅ Yes | ⚠️ Requires auth | ⚠️ Requires auth |
+| Feature | Trivy | Snyk | Wiz | Clair |
+| ------- | ----- | ---- | --- | ----- |
+| **Speed** | Very Fast | Medium | Medium | Medium |
+| **Open Source** | ✅ Yes | ❌ Commercial | ❌ Commercial | ✅ Yes |
+| **Cost** | Free | Freemium/Paid | Enterprise | Free |
+| **Authentication** | None | Required | Required | Clair environment dependent |
+| **Fix Recommendations** | Limited | ✅ Excellent | ⚠️ Basic | ⚠️ Basic |
+| **IaC Scanning** | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No |
+| **Secrets Detection** | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No |
+| **Multi-Cloud** | ⚠️ Limited | ⚠️ Limited | ✅ Excellent | ⚠️ Limited |
+| **Easy to Deploy** | ✅ Yes | ⚠️ Requires auth | ⚠️ Requires auth | ⚠️ Requires Clair setup |
 
 ---
 
@@ -199,6 +232,24 @@ scanners:
       enabled: true
       command:
         timeout: 10m  # Wiz may be slower
+```
+
+### For organizations using Clair
+
+Use Trivy and Clair together:
+
+```yaml
+scanners:
+  concurrency: 4
+  scanners:
+    - name: trivy
+      type: trivy
+      enabled: true
+    - name: clair
+      type: clair
+      enabled: true
+      command:
+        timeout: 5m
 ```
 
 ---

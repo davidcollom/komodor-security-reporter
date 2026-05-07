@@ -14,12 +14,8 @@ import (
 	"github.com/davidcollom/komodor-security-reporter/internal/reconciler"
 	"github.com/davidcollom/komodor-security-reporter/internal/registry"
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners"
+	_ "github.com/davidcollom/komodor-security-reporter/internal/scanners/all"
 	"github.com/davidcollom/komodor-security-reporter/internal/state"
-
-	// Import scanner packages to trigger their init() registration.
-	_ "github.com/davidcollom/komodor-security-reporter/internal/scanners/snyk"
-	_ "github.com/davidcollom/komodor-security-reporter/internal/scanners/trivy"
-	_ "github.com/davidcollom/komodor-security-reporter/internal/scanners/wiz"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
