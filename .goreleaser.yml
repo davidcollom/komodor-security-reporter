@@ -1,0 +1,81 @@
+version: 2
+project_name: komodor-security-reporter
+
+report_sizes: true
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+    - go generate ./...
+
+builds:
+  - id: komodor-security-reporter
+    main: ./cmd/komodor-security-reporter
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/davidcollom/komodor-security-reporter/internal/version.Version={{.Version}}
+      - -X github.com/davidcollom/komodor-security-reporter/internal/version.Commit={{.Commit}}
+      - -X github.com/davidcollom/komodor-security-reporter/internal/version.Date={{.Date}}
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: true
+    files:
+      - LICENSE
+      - README.md
+      - src: docs/example-config.yaml
+        dst: example-config.yaml
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-dev"
+
+changelog:
+  use: github
+  sort: asc
+  abbrev: 6
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore"
+      - "^style"
+
+dockers_v2:
+  - images:
+      - "ghcr.io/davidcollom/komodor-security-reporter"
+    tags:
+      - "{{ .Version }}"
+      - latest
+    platforms:
+      - linux/arm64
+      - linux/amd64
+    labels:
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.name: "{{ .ProjectName }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+
+release:
+  name_template: "Release {{ .Version }}"
+  draft: false
+  mode: replace

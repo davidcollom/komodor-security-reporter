@@ -1,0 +1,106 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+        exclude: ^helm/.*/templates/.*\.yaml$
+      - id: check-json
+      - id: end-of-file-fixer
+        exclude: ^helm/.*/(values.schema.json|README.md)$
+      - id: trailing-whitespace
+      - id: check-added-large-files
+      - id: mixed-line-ending
+      - id: detect-private-key
+      - id: check-case-conflict
+
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -w
+        language: system
+        types: [go]
+
+      - id: go-vet
+        name: go vet ./...
+        entry: go vet ./...
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: go-test
+        name: go test ./...
+        entry: go test ./...
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: golangci-lint-v2
+        name: golangci-lint (v2)
+        entry: golangci-lint run --config .golangci.yml --timeout 5m
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: go-mod-tidy-check
+        name: go mod tidy (must not change go.mod/go.sum)
+        entry: sh -c 'go mod tidy && git diff --exit-code -- go.mod go.sum'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: go-test-race
+        name: go test -race ./...
+        entry: go test -race ./...
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+  # Helm chart documentation and schema generation
+  - repo: https://github.com/norwoodj/helm-docs
+    rev:  "v1.14.2"
+    hooks:
+      - id: helm-docs
+        args:
+          # Make the tool search for charts only under the `helm` directory
+          - --chart-search-root=helm
+        exclude_types:
+          - gzip
+
+  - repo: https://github.com/dadav/helm-schema
+    rev: 0.23.0
+    hooks:
+      - id: helm-schema
+        exclude_types:
+          - gzip
+        # for all available options: helm-schema -h
+        args:
+          # directory to search recursively within for charts
+          - --chart-search-root=helm
+          # don't analyze dependencies
+          - --no-dependencies
+          # add references to values file if not exist
+          - --add-schema-reference
+          # list of fields to skip from being created by default
+          # e.g. generate a relatively permissive schema
+          # - "--skip-auto-generation=required,additionalProperties"
+
+  - repo: https://github.com/dj-wasabi/pre-commit-hooks
+    rev: 0.1.1
+    hooks:
+      - id: helm-lint
+      - id: helm-unittest
+        args:
+          - helm/komodor-security-alerter
+
+
+  - repo: https://github.com/TekWizely/pre-commit-golang
+    rev: v1.0.0-rc.4
+    hooks:
+      - id: go-mod-tidy-repo
+      - id: go-sec-mod
+      - id: go-critic
+      - id: go-staticcheck-mod
+      - id: go-vulncheck-mod
+      - id: golangci-lint-mod

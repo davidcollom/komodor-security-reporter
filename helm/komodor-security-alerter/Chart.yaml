@@ -1,0 +1,22 @@
+apiVersion: v2
+name: komodor-security-reporter
+description: Kubernetes-native image vulnerability watcher for Komodor
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+keywords:
+  - security
+  - vulnerability
+  - kubernetes
+  - komodor
+
+maintainers:
+  - name: David Collom
+    email: david@example.com
+
+home: https://github.com/davidcollom/komodor-security-reporter
+sources:
+  - https://github.com/davidcollom/komodor-security-reporter
+
+dependencies: []

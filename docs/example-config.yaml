@@ -1,0 +1,58 @@
+---
+clusterName: sophos-cert-manager-loadtest
+
+namespaces:
+  # include:
+    # - production
+    # - platform
+  exclude:
+    - kube-system
+    - kube-node-lease
+    # - cert-manager
+
+workloads:
+  kinds:
+    - Deployment
+    - StatefulSet
+    - DaemonSet
+    - Job
+    - CronJob
+
+registry:
+  resolveDigest: true
+
+state:
+  # Expire stored scan state after this duration.
+  # Default is 72h if omitted.
+  ttl: 72h
+
+scanners:
+  concurrency: 4
+  scanners:
+    - name: trivy
+      type: trivy
+      enabled: true
+    # - name: snyk
+    #   type: snyk
+    #   enabled: true
+    #   command:
+    #     # Snyk requires CLI binary. Omit binary to use system PATH, or set absolute path.
+    #     binary: /opt/homebrew/bin/snyk
+    #     timeout: 5m
+    # - name: wiz
+    #   type: wiz
+    #   enabled: false
+    #   command:
+    #     # Wiz requires CLI binary. Omit binary to use system PATH, or set absolute path.
+    #     # binary: /opt/homebrew/bin/wizcli
+    #     timeout: 5m
+
+publishing:
+  minimumSeverity: high
+  includeTopFindings: 5
+  publishCleanScans: false
+  dedupeTTL: 24h
+
+komodor:
+  enabled: true
+  baseURL: https://api.komodor.io

@@ -1,0 +1,15 @@
+1. Get the status of the deployment:
+  kubectl get deployment -n {{ .Release.Namespace }} {{ include "komodor-security-reporter.fullname" . }}
+
+2. View logs:
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "komodor-security-reporter.name" . }} -f
+
+3. Access metrics:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "komodor-security-reporter.fullname" . }} 8080:8080
+  open http://localhost:8080/metrics
+
+4. Verify Komodor credentials are set:
+  kubectl get secret -n {{ .Release.Namespace }} {{ .Values.komodor.secretName }}
+
+For more information, visit:
+https://github.com/davidcollom/komodor-security-reporter
