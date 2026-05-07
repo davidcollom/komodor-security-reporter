@@ -47,7 +47,7 @@ type ScannersConfig struct {
 // ScannerConfig defines a single scanner configuration.
 type ScannerConfig struct {
 	Name    string
-	Type    string // trivy, snyk, wiz
+	Type    string // trivy, clair, snyk, wiz
 	Enabled bool
 	Command CommandConfig
 }

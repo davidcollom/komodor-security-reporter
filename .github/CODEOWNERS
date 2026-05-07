@@ -1,0 +1,12 @@
+# Default owner for the repository.
+* @davidcollom
+
+# Scanner ownership.
+/internal/scanners/ @davidcollom
+/internal/scanners/clair/ @davidcollom
+/internal/scanners/trivy/ @davidcollom
+/internal/scanners/snyk/ @davidcollom
+/internal/scanners/wiz/ @davidcollom
+
+# Add an additional owner (person or team) when ready, for example:
+# /internal/scanners/ @davidcollom @your-org/security-scanners
