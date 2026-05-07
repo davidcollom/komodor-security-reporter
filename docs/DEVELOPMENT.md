@@ -62,7 +62,7 @@ docs/
 └── DEVELOPMENT.md               # This file
 
 helm/
-└── komodor-security-alerter/     # Helm chart
+└── komodor-security-reporter/    # Helm chart
     ├── Chart.yaml
     ├── values.yaml
     └── templates/
@@ -85,8 +85,8 @@ Makefile                         # Development tasks
 
 ```bash
 # Clone the repository
-git clone https://github.com/davidcollom/komodor-security-alerter.git
-cd komodor-security-alerter
+git clone https://github.com/davidcollom/komodor-security-reporter.git
+cd komodor-security-reporter
 
 # Install development tools
 make install-tools

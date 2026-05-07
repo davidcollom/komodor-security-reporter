@@ -38,7 +38,7 @@ updates:
           - "*"
 
   - package-ecosystem: "helm"
-    directory: "/helm/komodor-security-alerter"
+    directory: "/helm/komodor-security-reporter"
     schedule:
       interval: "weekly"
       day: "monday"
