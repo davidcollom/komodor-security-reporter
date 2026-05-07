@@ -4,7 +4,7 @@ This alerter supports multiple container image vulnerability scanning backends. 
 
 ## Supported Scanners
 
-## Installation Examples
+### Installation Examples
 
 Choose one of the installation models:
 

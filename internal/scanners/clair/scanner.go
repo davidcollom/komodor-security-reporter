@@ -226,6 +226,7 @@ func dedupeByFingerprint(vulns []map[string]interface{}) []map[string]interface{
 				toString(vuln["package"]),
 				toString(vuln["packageName"]),
 				toString(vuln["featureName"]),
+				toString(vuln["artifact"]),
 			),
 			firstNonEmpty(
 				toString(vuln["installedVersion"]),
