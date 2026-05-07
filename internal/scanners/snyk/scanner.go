@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davidcollom/komodor-security-reporter/internal/config"
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners"
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners/command"
 	"github.com/sirupsen/logrus"
@@ -16,7 +17,7 @@ func init() {
 	scanners.RegisterScanner("snyk", newScannerFactory)
 }
 
-func newScannerFactory(name string, binary string, log logrus.FieldLogger) (scanners.Scanner, error) {
+func newScannerFactory(_ config.ScannerConfig, binary string, log logrus.FieldLogger) (scanners.Scanner, error) {
 	return NewScanner(binary, log), nil
 }
 

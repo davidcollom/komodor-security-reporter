@@ -53,6 +53,13 @@ scanners:
     #     # Clair requires clairctl CLI. Omit binary to use system PATH, or set absolute path.
     #     # binary: /opt/homebrew/bin/clairctl
     #     timeout: 5m
+    # - name: trivy-operator
+    #   type: trivy-operator
+    #   enabled: false
+    #   resources:
+    #     # Optional: choose Trivy Operator CRDs to ingest.
+    #     - vulnerabilityreports
+    #     # - clustervulnerabilityreports
 
 publishing:
   minimumSeverity: high

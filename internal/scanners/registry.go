@@ -8,7 +8,7 @@ import (
 )
 
 // ScannerFactory creates a scanner from configuration.
-type ScannerFactory func(name string, binaryPath string, log logrus.FieldLogger) (Scanner, error)
+type ScannerFactory func(scannerCfg config.ScannerConfig, binaryPath string, log logrus.FieldLogger) (Scanner, error)
 
 var scannerFactories = make(map[string]ScannerFactory)
 
@@ -37,7 +37,7 @@ func CreateScannerRegistry(scannerConfigs []config.ScannerConfig, log logrus.Fie
 			binaryPath = scannerCfg.Type
 		}
 
-		scanner, err := factory(scannerCfg.Name, binaryPath, log)
+		scanner, err := factory(scannerCfg, binaryPath, log)
 		if err != nil {
 			return nil, fmt.Errorf("create scanner %s (%s): %w", scannerCfg.Name, scannerCfg.Type, err)
 		}

@@ -4,7 +4,7 @@ A Kubernetes-native watcher that detects container image vulnerabilities and pub
 
 ## Overview
 
-This application provides a secure, low-noise bridge between running Kubernetes workloads, vulnerability scanners (Trivy, Snyk, Wiz), and Komodor. It:
+This application provides a secure, low-noise bridge between running Kubernetes workloads, vulnerability scanners (Trivy, Trivy Operator reports, Snyk, Wiz, Clair), and Komodor. It:
 
 - Watches Kubernetes workloads (Deployments, StatefulSets, DaemonSets, Jobs, CronJobs)
 - Extracts container images from running workloads
@@ -119,7 +119,7 @@ See [DEVELOPMENT.md](./docs/DEVELOPMENT.md) for more info
 2. **Image Extractor**: Reads images from containers, initContainers, and ephemeralContainers
 3. **Digest Resolver**: Resolves image tags to immutable digests using go-containerregistry
 4. **Scanner Registry**: Loads configured scanner drivers and invokes them
-5. **Scanner Drivers**: Scan images and return structured results (Trivy, Snyk, Wiz)
+5. **Scanner Drivers**: Scan images and return structured results (Trivy, Trivy Operator, Snyk, Wiz, Clair)
 6. **Finding Normaliser**: Converts scanner-specific results to a common model
 7. **Policy Evaluator**: Determines whether to publish based on severity and deduplication
 8. **Komodor Publisher**: Publishes normalised events to Komodor

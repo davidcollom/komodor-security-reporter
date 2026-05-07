@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/davidcollom/komodor-security-reporter/internal/config"
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners"
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners/command"
 	"github.com/sirupsen/logrus"
@@ -18,7 +19,7 @@ func init() {
 // newScannerFactory creates a Trivy scanner from configuration.
 // Trivy is a native Go application, so no separate binary installation is strictly required.
 // If binary path is omitted, defaults to "trivy" on system PATH.
-func newScannerFactory(name string, binary string, log logrus.FieldLogger) (scanners.Scanner, error) {
+func newScannerFactory(_ config.ScannerConfig, binary string, log logrus.FieldLogger) (scanners.Scanner, error) {
 	// Default to "trivy" if no binary path specified; relies on PATH
 	if binary == "" {
 		binary = "trivy"

@@ -46,10 +46,11 @@ type ScannersConfig struct {
 
 // ScannerConfig defines a single scanner configuration.
 type ScannerConfig struct {
-	Name    string
-	Type    string // trivy, clair, snyk, wiz
-	Enabled bool
-	Command CommandConfig
+	Name      string
+	Type      string // trivy, trivy-operator, clair, snyk, wiz
+	Enabled   bool
+	Resources []string
+	Command   CommandConfig
 }
 
 // CommandConfig defines CLI-based scanner configuration.
@@ -130,6 +131,14 @@ func validateScanners(scanners ScannersConfig) error {
 
 		if s.Type == "" {
 			return fmt.Errorf("scanner type is required")
+		}
+
+		if s.Type == "trivy-operator" {
+			for _, resource := range s.Resources {
+				if resource == "" {
+					return fmt.Errorf("trivy-operator scanner resources entries must be non-empty")
+				}
+			}
 		}
 	}
 
