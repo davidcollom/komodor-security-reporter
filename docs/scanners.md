@@ -375,7 +375,6 @@ scanners:
       type: trivy-operator
       enabled: true
 ```
-```
 
 ---
 
