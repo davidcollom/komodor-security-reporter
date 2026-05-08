@@ -4,9 +4,9 @@
   "properties": {
     "affinity": {
       "additionalProperties": false,
+      "description": "Pod affinity/anti-affinity rules. @param affinity Affinity rules.",
       "required": [],
-      "title": "affinity",
-      "type": "object"
+      "title": "affinity"
     },
     "config": {
       "additionalProperties": false,
@@ -14,21 +14,21 @@
       "properties": {
         "clusterName": {
           "default": "cluster-1",
-          "title": "clusterName",
-          "type": "string"
+          "description": "Cluster name included in emitted events. @param config.clusterName Cluster identifier used in event metadata.",
+          "required": [],
+          "title": "clusterName"
         },
         "komodor": {
           "additionalProperties": false,
           "properties": {
             "baseURL": {
-              "default": "https://app.komodor.io",
-              "title": "baseURL",
-              "type": "string"
+              "default": "https://api.komodor.io",
+              "description": "Komodor API base URL. @param config.komodor.baseURL Base URL for Komodor API.",
+              "required": [],
+              "title": "baseURL"
             }
           },
-          "required": [
-            "baseURL"
-          ],
+          "required": [],
           "title": "komodor",
           "type": "object"
         },
@@ -36,6 +36,8 @@
           "additionalProperties": false,
           "properties": {
             "exclude": {
+              "default": "this should be a list of namespaces or empty to exclude no namespaces.",
+              "description": "Namespaces to exclude from reconciliation. @param config.namespaces.exclude Namespaces to exclude.",
               "items": {
                 "anyOf": [
                   {
@@ -47,29 +49,20 @@
                 ],
                 "required": []
               },
-              "title": "exclude",
-              "type": "array"
+              "required": [],
+              "title": "exclude"
             },
             "include": {
+              "default": "this should be a list of namespaces or empty to include all namespaces.",
+              "description": "Namespaces to include in reconciliation. @param config.namespaces.include Namespaces to include.",
               "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ],
                 "required": []
               },
-              "title": "include",
-              "type": "array"
+              "required": [],
+              "title": "include"
             }
           },
-          "required": [
-            "include",
-            "exclude"
-          ],
+          "required": [],
           "title": "namespaces",
           "type": "object"
         },
@@ -78,37 +71,36 @@
           "properties": {
             "dedupeTTL": {
               "default": "24h",
-              "title": "dedupeTTL",
-              "type": "string"
+              "description": "Deduplication TTL for repeated findings. @param config.publishing.dedupeTTL Deduplication time window.",
+              "required": [],
+              "title": "dedupeTTL"
             },
             "includeTopFindings": {
-              "default": 5,
-              "title": "includeTopFindings",
-              "type": "integer"
+              "default": "5",
+              "description": "Number of top findings to include in payloads. @param config.publishing.includeTopFindings Number of top findings to include.",
+              "required": [],
+              "title": "includeTopFindings"
             },
             "minimumSeverity": {
               "default": "high",
-              "title": "minimumSeverity",
-              "type": "string"
+              "description": "Minimum severity required before publishing findings. @param config.publishing.minimumSeverity Minimum severity threshold.",
+              "required": [],
+              "title": "minimumSeverity"
             },
             "mode": {
               "default": "komodor",
-              "title": "mode",
-              "type": "string"
+              "description": "Publishing mode (`komodor`, `events`, or `both`). @param config.publishing.mode Destination(s) for published findings.",
+              "required": [],
+              "title": "mode"
             },
             "publishCleanScans": {
-              "default": false,
-              "title": "publishCleanScans",
-              "type": "boolean"
+              "default": "false",
+              "description": "Publish clean scans with no findings. @param config.publishing.publishCleanScans Whether to publish clean scan results.",
+              "required": [],
+              "title": "publishCleanScans"
             }
           },
-          "required": [
-            "mode",
-            "minimumSeverity",
-            "includeTopFindings",
-            "publishCleanScans",
-            "dedupeTTL"
-          ],
+          "required": [],
           "title": "publishing",
           "type": "object"
         },
@@ -116,59 +108,55 @@
           "additionalProperties": false,
           "properties": {
             "resolveDigest": {
-              "default": true,
-              "title": "resolveDigest",
-              "type": "boolean"
+              "default": "true",
+              "description": "Resolve image tags to immutable digests. @param config.registry.resolveDigest Whether to resolve image digests.",
+              "required": [],
+              "title": "resolveDigest"
             }
           },
-          "required": [
-            "resolveDigest"
-          ],
+          "required": [],
           "title": "registry",
           "type": "object"
         },
         "scanners": {
           "additionalProperties": false,
           "properties": {
+            "concurrency": {
+              "default": "4",
+              "description": "Scanner definitions. @param config.scanners.scanners List of scanner configurations. @param config.scanners.concurrency Scanner concurrency.",
+              "required": [],
+              "title": "concurrency"
+            },
             "scanners": {
               "items": {
                 "anyOf": [
                   {
                     "additionalProperties": false,
                     "properties": {
-                      "command": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "binary": {
-                            "default": "/usr/local/bin/trivy",
-                            "title": "binary",
-                            "type": "string"
-                          },
-                          "timeout": {
-                            "default": "5m",
-                            "title": "timeout",
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "binary",
-                          "timeout"
-                        ],
-                        "title": "command",
-                        "type": "object"
-                      },
                       "enabled": {
                         "default": true,
                         "title": "enabled",
                         "type": "boolean"
                       },
                       "name": {
-                        "default": "trivy",
+                        "default": "trivyoperator",
                         "title": "name",
                         "type": "string"
                       },
+                      "resources": {
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            }
+                          ],
+                          "required": []
+                        },
+                        "title": "resources",
+                        "type": "array"
+                      },
                       "type": {
-                        "default": "trivy",
+                        "default": "trivy-operator",
                         "title": "type",
                         "type": "string"
                       }
@@ -177,7 +165,7 @@
                       "name",
                       "type",
                       "enabled",
-                      "command"
+                      "resources"
                     ],
                     "type": "object"
                   }
@@ -198,6 +186,7 @@
           "additionalProperties": false,
           "properties": {
             "kinds": {
+              "description": "Workload kinds to scan. @param config.workloads.kinds Kubernetes workload kinds to watch.",
               "items": {
                 "anyOf": [
                   {
@@ -218,19 +207,16 @@
                 ],
                 "required": []
               },
-              "title": "kinds",
-              "type": "array"
+              "required": [],
+              "title": "kinds"
             }
           },
-          "required": [
-            "kinds"
-          ],
+          "required": [],
           "title": "workloads",
           "type": "object"
         }
       },
       "required": [
-        "clusterName",
         "namespaces",
         "workloads",
         "registry",
@@ -243,8 +229,9 @@
     },
     "fullnameOverride": {
       "default": "",
-      "title": "fullnameOverride",
-      "type": "string"
+      "description": "Fully override the generated release name. @param fullnameOverride String to fully override the release name.",
+      "required": [],
+      "title": "fullnameOverride"
     },
     "global": {
       "description": "Global values are values that can be accessed from any chart or subchart by exactly the same name.",
@@ -257,57 +244,116 @@
       "properties": {
         "pullPolicy": {
           "default": "IfNotPresent",
-          "title": "pullPolicy",
-          "type": "string"
+          "description": "Container image pull policy. @param image.pullPolicy Kubernetes image pull policy.",
+          "required": [],
+          "title": "pullPolicy"
         },
         "repository": {
           "default": "ghcr.io/davidcollom/komodor-security-reporter",
-          "title": "repository",
-          "type": "string"
+          "description": "Container image repository. @param image.repository Image repository for the reporter container.",
+          "required": [],
+          "title": "repository"
         },
         "tag": {
           "default": "latest",
-          "title": "tag",
-          "type": "string"
+          "description": "Container image tag. @param image.tag Image tag to deploy.",
+          "required": [],
+          "title": "tag"
         }
       },
-      "required": [
-        "repository",
-        "pullPolicy",
-        "tag"
-      ],
+      "required": [],
       "title": "image",
       "type": "object"
     },
     "imagePullSecrets": {
+      "description": "List of image pull secrets for private registries. @param imagePullSecrets List of imagePullSecrets to attach to the pod.",
       "items": {
         "required": []
       },
-      "title": "imagePullSecrets",
-      "type": "array"
+      "required": [],
+      "title": "imagePullSecrets"
     },
     "komodor": {
       "additionalProperties": false,
       "description": "Komodor credentials",
       "properties": {
+        "apiKey": {
+          "default": "",
+          "description": "Komodor API key value used when `komodor.createSecret=true`. @param komodor.apiKey Komodor API key to store in a created Secret.",
+          "required": [],
+          "title": "apiKey"
+        },
         "createSecret": {
-          "default": false,
-          "description": "Set to true to create a Secret for Komodor API key",
-          "title": "createSecret",
-          "type": "boolean"
+          "default": "false",
+          "description": "Create a Secret containing the Komodor API key. @param komodor.createSecret Whether to create a Komodor credentials Secret.",
+          "required": [],
+          "title": "createSecret"
         },
         "secretName": {
           "default": "komodor-credentials",
-          "title": "secretName",
-          "type": "string"
+          "description": "Existing Secret name containing `api-key`. @param komodor.secretName Name of the Secret containing Komodor API key.",
+          "required": [],
+          "title": "secretName"
+        }
+      },
+      "required": [],
+      "title": "komodor",
+      "type": "object"
+    },
+    "livenessProbe": {
+      "additionalProperties": false,
+      "description": "Full liveness probe definition. Set to null to disable the liveness probe. @param livenessProbe Kubernetes livenessProbe map.",
+      "properties": {
+        "failureThreshold": {
+          "default": 3,
+          "title": "failureThreshold",
+          "type": "integer"
+        },
+        "httpGet": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "default": "/healthz",
+              "title": "path",
+              "type": "string"
+            },
+            "port": {
+              "default": "metrics",
+              "title": "port",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "port"
+          ],
+          "title": "httpGet",
+          "type": "object"
+        },
+        "initialDelaySeconds": {
+          "default": 30,
+          "title": "initialDelaySeconds",
+          "type": "integer"
+        },
+        "periodSeconds": {
+          "default": 10,
+          "title": "periodSeconds",
+          "type": "integer"
+        },
+        "timeoutSeconds": {
+          "default": 1,
+          "title": "timeoutSeconds",
+          "type": "integer"
         }
       },
       "required": [
-        "createSecret",
-        "secretName"
+        "httpGet",
+        "initialDelaySeconds",
+        "periodSeconds",
+        "timeoutSeconds",
+        "failureThreshold"
       ],
-      "title": "komodor",
-      "type": "object"
+      "title": "livenessProbe"
     },
     "logging": {
       "additionalProperties": false,
@@ -315,13 +361,12 @@
       "properties": {
         "level": {
           "default": "info",
-          "title": "level",
-          "type": "string"
+          "description": "Application log level. @param logging.level Log level (`debug`, `info`, `warn`, `error`).",
+          "required": [],
+          "title": "level"
         }
       },
-      "required": [
-        "level"
-      ],
+      "required": [],
       "title": "logging",
       "type": "object"
     },
@@ -330,111 +375,77 @@
       "description": "Metrics",
       "properties": {
         "enabled": {
-          "default": true,
-          "title": "enabled",
-          "type": "boolean"
+          "default": "true",
+          "description": "Enable metrics endpoint. @param metrics.enabled Whether metrics endpoint is enabled.",
+          "required": [],
+          "title": "enabled"
         },
         "port": {
-          "default": 8080,
-          "title": "port",
-          "type": "integer"
+          "default": "8080",
+          "description": "Metrics and health endpoint port. @param metrics.port Container port for metrics/health endpoints.",
+          "required": [],
+          "title": "port"
         }
       },
-      "required": [
-        "enabled",
-        "port"
-      ],
+      "required": [],
       "title": "metrics",
       "type": "object"
     },
     "nameOverride": {
       "default": "",
-      "description": "yaml-language-server: $schema=values.schema.json",
-      "title": "nameOverride",
-      "type": "string"
+      "description": "Override the name of the chart. @param nameOverride String to partially override the release name.",
+      "required": [],
+      "title": "nameOverride"
     },
     "nodeSelector": {
       "additionalProperties": false,
+      "description": "Node selector labels for pod scheduling. @param nodeSelector Node selector map.",
       "required": [],
-      "title": "nodeSelector",
-      "type": "object"
+      "title": "nodeSelector"
     },
     "persistence": {
       "additionalProperties": false,
       "description": "Persistence",
       "properties": {
         "enabled": {
-          "default": true,
-          "title": "enabled",
-          "type": "boolean"
+          "default": "true",
+          "description": "Enable persistence for local cache/state. @param persistence.enabled Whether persistence is enabled.",
+          "required": [],
+          "title": "enabled"
         },
         "existingClaim": {
           "default": "",
-          "description": "If you want to use an existing PVC",
-          "title": "existingClaim",
-          "type": "string"
+          "description": "Existing PersistentVolumeClaim to use instead of creating one. @param persistence.existingClaim Existing PVC name.",
+          "required": [],
+          "title": "existingClaim"
         },
         "size": {
           "default": "1Gi",
-          "title": "size",
-          "type": "string"
+          "description": "PVC requested storage size. @param persistence.size PersistentVolumeClaim size.",
+          "required": [],
+          "title": "size"
         },
         "storageClassName": {
           "default": "",
-          "title": "storageClassName",
-          "type": "string"
+          "description": "StorageClass name for the PVC. @param persistence.storageClassName StorageClass name for PVC.",
+          "required": [],
+          "title": "storageClassName"
         }
       },
-      "required": [
-        "enabled",
-        "size",
-        "storageClassName",
-        "existingClaim"
-      ],
+      "required": [],
       "title": "persistence",
       "type": "object"
     },
     "podAnnotations": {
       "additionalProperties": false,
+      "description": "Extra annotations to add to the pod template. @param podAnnotations Additional pod annotations.",
       "required": [],
-      "title": "podAnnotations",
-      "type": "object"
+      "title": "podAnnotations"
     },
     "podSecurityContext": {
       "additionalProperties": false,
+      "description": "Pod-level security context. @param podSecurityContext Pod security context values.",
       "properties": {
-        "allowPrivilegeEscalation": {
-          "default": false,
-          "title": "allowPrivilegeEscalation",
-          "type": "boolean"
-        },
-        "capabilities": {
-          "additionalProperties": false,
-          "properties": {
-            "drop": {
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  }
-                ],
-                "required": []
-              },
-              "title": "drop",
-              "type": "array"
-            }
-          },
-          "required": [
-            "drop"
-          ],
-          "title": "capabilities",
-          "type": "object"
-        },
-        "readOnlyRootFilesystem": {
-          "default": true,
-          "title": "readOnlyRootFilesystem",
-          "type": "boolean"
-        },
         "runAsNonRoot": {
           "default": true,
           "title": "runAsNonRoot",
@@ -448,42 +459,100 @@
       },
       "required": [
         "runAsNonRoot",
-        "runAsUser",
-        "readOnlyRootFilesystem",
-        "allowPrivilegeEscalation",
-        "capabilities"
+        "runAsUser"
       ],
-      "title": "podSecurityContext",
-      "type": "object"
+      "title": "podSecurityContext"
     },
     "rbac": {
       "additionalProperties": false,
       "properties": {
         "create": {
-          "default": true,
-          "title": "create",
-          "type": "boolean"
+          "default": "true",
+          "description": "Create RBAC resources. @param rbac.create Whether to create RBAC resources.",
+          "required": [],
+          "title": "create"
         },
         "scope": {
           "default": "cluster",
-          "title": "scope",
-          "type": "string"
+          "description": "RBAC scope (`cluster` or `namespace`). @param rbac.scope Scope of RBAC permissions.",
+          "required": [],
+          "title": "scope"
         }
       },
-      "required": [
-        "create",
-        "scope"
-      ],
+      "required": [],
       "title": "rbac",
       "type": "object"
     },
+    "readinessProbe": {
+      "additionalProperties": false,
+      "description": "Full readiness probe definition. Set to null to disable the readiness probe. @param readinessProbe Kubernetes readinessProbe map.",
+      "properties": {
+        "failureThreshold": {
+          "default": 3,
+          "title": "failureThreshold",
+          "type": "integer"
+        },
+        "httpGet": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "default": "/readyz",
+              "title": "path",
+              "type": "string"
+            },
+            "port": {
+              "default": "metrics",
+              "title": "port",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "port"
+          ],
+          "title": "httpGet",
+          "type": "object"
+        },
+        "initialDelaySeconds": {
+          "default": 10,
+          "title": "initialDelaySeconds",
+          "type": "integer"
+        },
+        "periodSeconds": {
+          "default": 5,
+          "title": "periodSeconds",
+          "type": "integer"
+        },
+        "successThreshold": {
+          "default": 1,
+          "title": "successThreshold",
+          "type": "integer"
+        },
+        "timeoutSeconds": {
+          "default": 1,
+          "title": "timeoutSeconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "httpGet",
+        "initialDelaySeconds",
+        "periodSeconds",
+        "timeoutSeconds",
+        "successThreshold",
+        "failureThreshold"
+      ],
+      "title": "readinessProbe"
+    },
     "replicaCount": {
-      "default": 1,
-      "title": "replicaCount",
-      "type": "integer"
+      "default": "1",
+      "description": "Number of replicas for the Deployment. @param replicaCount Number of pod replicas to run.",
+      "required": [],
+      "title": "replicaCount"
     },
     "resources": {
       "additionalProperties": false,
+      "description": "Pod resource requests and limits. @param resources CPU and memory requests/limits.",
       "properties": {
         "limits": {
           "additionalProperties": false,
@@ -532,11 +601,11 @@
         "limits",
         "requests"
       ],
-      "title": "resources",
-      "type": "object"
+      "title": "resources"
     },
     "securityContext": {
       "additionalProperties": false,
+      "description": "Container-level security context. @param securityContext Container security context values.",
       "properties": {
         "allowPrivilegeEscalation": {
           "default": false,
@@ -588,33 +657,31 @@
         "runAsNonRoot",
         "runAsUser"
       ],
-      "title": "securityContext",
-      "type": "object"
+      "title": "securityContext"
     },
     "service": {
       "additionalProperties": false,
       "properties": {
         "port": {
-          "default": 8080,
-          "title": "port",
-          "type": "integer"
+          "default": "8080",
+          "description": "Service port for metrics/health endpoint. @param service.port Service port.",
+          "required": [],
+          "title": "port"
         },
         "targetPort": {
-          "default": 8080,
-          "title": "targetPort",
-          "type": "integer"
+          "default": "8080",
+          "description": "Target container port for the service. @param service.targetPort Target container port.",
+          "required": [],
+          "title": "targetPort"
         },
         "type": {
           "default": "ClusterIP",
-          "title": "type",
-          "type": "string"
+          "description": "Kubernetes Service type. @param service.type Service type.",
+          "required": [],
+          "title": "type"
         }
       },
-      "required": [
-        "type",
-        "port",
-        "targetPort"
-      ],
+      "required": [],
       "title": "service",
       "type": "object"
     },
@@ -623,53 +690,41 @@
       "properties": {
         "annotations": {
           "additionalProperties": false,
+          "description": "Annotations for the ServiceAccount. @param serviceAccount.annotations Additional ServiceAccount annotations.",
           "required": [],
-          "title": "annotations",
-          "type": "object"
+          "title": "annotations"
         },
         "create": {
-          "default": true,
-          "title": "create",
-          "type": "boolean"
+          "default": "true",
+          "description": "Create a dedicated ServiceAccount. @param serviceAccount.create Whether to create a ServiceAccount resource.",
+          "required": [],
+          "title": "create"
         },
         "name": {
           "default": "",
-          "title": "name",
-          "type": "string"
+          "description": "Use an existing ServiceAccount name. @param serviceAccount.name Existing ServiceAccount name to use.",
+          "required": [],
+          "title": "name"
         }
       },
-      "required": [
-        "create",
-        "annotations",
-        "name"
-      ],
+      "required": [],
       "title": "serviceAccount",
       "type": "object"
     },
     "tolerations": {
+      "description": "Pod tolerations. @param tolerations List of tolerations.",
       "items": {
         "required": []
       },
-      "title": "tolerations",
-      "type": "array"
+      "required": [],
+      "title": "tolerations"
     }
   },
   "required": [
-    "nameOverride",
-    "fullnameOverride",
-    "replicaCount",
     "image",
-    "imagePullSecrets",
     "serviceAccount",
     "rbac",
-    "podAnnotations",
-    "podSecurityContext",
-    "securityContext",
     "service",
-    "resources",
-    "nodeSelector",
-    "tolerations",
-    "affinity",
     "config",
     "komodor",
     "logging",

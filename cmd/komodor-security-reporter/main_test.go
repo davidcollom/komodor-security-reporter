@@ -42,3 +42,15 @@ func TestNewRootCommandParsesFlags(t *testing.T) {
 	require.Equal(t, ":9090", metricsAddr)
 	require.Equal(t, "debug", logLevel)
 }
+
+func TestStateStoreNamespaceFromEnv(t *testing.T) {
+	t.Setenv("POD_NAMESPACE", "komodor-security-reporter")
+
+	require.Equal(t, "komodor-security-reporter", stateStoreNamespace())
+}
+
+func TestStateStoreNamespaceDefaultsToDefault(t *testing.T) {
+	t.Setenv("POD_NAMESPACE", "")
+
+	require.Equal(t, "default", stateStoreNamespace())
+}

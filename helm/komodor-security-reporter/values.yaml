@@ -1,37 +1,62 @@
 ---
 # yaml-language-server: $schema=values.schema.json
+# -- Override the name of the chart.
+# @param nameOverride String to partially override the release name.
 nameOverride: ""
+# -- Fully override the generated release name.
+# @param fullnameOverride String to fully override the release name.
 fullnameOverride: ""
 
+# -- Number of replicas for the Deployment.
+# @param replicaCount Number of pod replicas to run.
 replicaCount: 1
 
 image:
+  # -- Container image repository.
+  # @param image.repository Image repository for the reporter container.
   repository: ghcr.io/davidcollom/komodor-security-reporter
+  # -- Container image pull policy.
+  # @param image.pullPolicy Kubernetes image pull policy.
   pullPolicy: IfNotPresent
+  # -- Container image tag.
+  # @param image.tag Image tag to deploy.
   tag: "latest"
 
+# -- List of image pull secrets for private registries.
+# @param imagePullSecrets List of imagePullSecrets to attach to the pod.
 imagePullSecrets: []
 
 serviceAccount:
+  # -- Create a dedicated ServiceAccount.
+  # @param serviceAccount.create Whether to create a ServiceAccount resource.
   create: true
+  # -- Annotations for the ServiceAccount.
+  # @param serviceAccount.annotations Additional ServiceAccount annotations.
   annotations: {}
+  # -- Use an existing ServiceAccount name.
+  # @param serviceAccount.name Existing ServiceAccount name to use.
   name: ""
 
 rbac:
+  # -- Create RBAC resources.
+  # @param rbac.create Whether to create RBAC resources.
   create: true
-  scope: cluster  # cluster or namespace
+  # -- RBAC scope (`cluster` or `namespace`).
+  # @param rbac.scope Scope of RBAC permissions.
+  scope: cluster
 
+# -- Extra annotations to add to the pod template.
+# @param podAnnotations Additional pod annotations.
 podAnnotations: {}
 
+# -- Pod-level security context.
+# @param podSecurityContext Pod security context values.
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 65534
-  readOnlyRootFilesystem: true
-  allowPrivilegeEscalation: false
-  capabilities:
-    drop:
-      - ALL
 
+# -- Container-level security context.
+# @param securityContext Container security context values.
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:
@@ -41,11 +66,42 @@ securityContext:
   runAsNonRoot: true
   runAsUser: 65534
 
+# -- Full liveness probe definition. Set to null to disable the liveness probe.
+# @param livenessProbe Kubernetes livenessProbe map.
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: metrics
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 1
+  failureThreshold: 3
+
+# -- Full readiness probe definition. Set to null to disable the readiness probe.
+# @param readinessProbe Kubernetes readinessProbe map.
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: metrics
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 1
+  successThreshold: 1
+  failureThreshold: 3
+
 service:
+  # -- Kubernetes Service type.
+  # @param service.type Service type.
   type: ClusterIP
+  # -- Service port for metrics/health endpoint.
+  # @param service.port Service port.
   port: 8080
+  # -- Target container port for the service.
+  # @param service.targetPort Target container port.
   targetPort: 8080
 
+# -- Pod resource requests and limits.
+# @param resources CPU and memory requests/limits.
 resources:
   limits:
     cpu: 500m
@@ -54,25 +110,39 @@ resources:
     cpu: 100m
     memory: 128Mi
 
+# -- Node selector labels for pod scheduling.
+# @param nodeSelector Node selector map.
 nodeSelector: {}
 
+# -- Pod tolerations.
+# @param tolerations List of tolerations.
 tolerations: []
 
+# -- Pod affinity/anti-affinity rules.
+# @param affinity Affinity rules.
 affinity: {}
 
 # Configuration
 config:
+  # -- Cluster name included in emitted events.
+  # @param config.clusterName Cluster identifier used in event metadata.
   clusterName: "cluster-1"
 
   namespaces:
-    include:
-      - production
-      - platform
+    # -- Namespaces to include in reconciliation.
+    # @param config.namespaces.include Namespaces to include.
+    # @default -- this should be a list of namespaces or empty to include all namespaces.
+    include: []
+    # -- Namespaces to exclude from reconciliation.
+    # @param config.namespaces.exclude Namespaces to exclude.
+    # @default -- this should be a list of namespaces or empty to exclude no namespaces.
     exclude:
       - kube-system
       - kube-node-lease
 
   workloads:
+    # -- Workload kinds to scan.
+    # @param config.workloads.kinds Kubernetes workload kinds to watch.
     kinds:
       - Deployment
       - StatefulSet
@@ -81,48 +151,88 @@ config:
       - CronJob
 
   registry:
+    # -- Resolve image tags to immutable digests.
+    # @param config.registry.resolveDigest Whether to resolve image digests.
     resolveDigest: true
 
   scanners:
+    # -- Scanner definitions.
+    # @param config.scanners.scanners List of scanner configurations.
+    # @param config.scanners.concurrency Scanner concurrency.
+    concurrency: 4
     scanners:
-      - name: trivy
-        type: trivy
+      # - name: trivy
+      #   type: trivy
+      #   enabled: true
+      #   command:
+      #     binary: /usr/local/bin/trivy
+      #     timeout: 5m
+      - name: trivyoperator
+        type: trivy-operator
         enabled: true
-        command:
-          binary: /usr/local/bin/trivy
-          timeout: 5m
+        resources:
+          - vulnerabilityreports
 
   publishing:
+    # -- Publishing mode (`komodor`, `events`, or `both`).
+    # @param config.publishing.mode Destination(s) for published findings.
     mode: komodor
+    # -- Minimum severity required before publishing findings.
+    # @param config.publishing.minimumSeverity Minimum severity threshold.
     minimumSeverity: high
+    # -- Number of top findings to include in payloads.
+    # @param config.publishing.includeTopFindings Number of top findings to include.
     includeTopFindings: 5
+    # -- Publish clean scans with no findings.
+    # @param config.publishing.publishCleanScans Whether to publish clean scan results.
     publishCleanScans: false
+    # -- Deduplication TTL for repeated findings.
+    # @param config.publishing.dedupeTTL Deduplication time window.
     dedupeTTL: 24h
 
   komodor:
-    baseURL: https://app.komodor.io
+    # -- Komodor API base URL.
+    # @param config.komodor.baseURL Base URL for Komodor API.
+    baseURL: https://api.komodor.io
 
 # Komodor credentials
 komodor:
-  # Set to true to create a Secret for Komodor API key
+  # -- Create a Secret containing the Komodor API key.
+  # @param komodor.createSecret Whether to create a Komodor credentials Secret.
   createSecret: false
+  # -- Existing Secret name containing `api-key`.
+  # @param komodor.secretName Name of the Secret containing Komodor API key.
   secretName: komodor-credentials
-  # Set this if creating the secret
-  # apiKey: your-api-key-here
+  # -- Komodor API key value used when `komodor.createSecret=true`.
+  # @param komodor.apiKey Komodor API key to store in a created Secret.
+  apiKey: ""
 
 # Logging
 logging:
+  # -- Application log level.
+  # @param logging.level Log level (`debug`, `info`, `warn`, `error`).
   level: info
 
 # Metrics
 metrics:
+  # -- Enable metrics endpoint.
+  # @param metrics.enabled Whether metrics endpoint is enabled.
   enabled: true
+  # -- Metrics and health endpoint port.
+  # @param metrics.port Container port for metrics/health endpoints.
   port: 8080
 
 # Persistence
 persistence:
+  # -- Enable persistence for local cache/state.
+  # @param persistence.enabled Whether persistence is enabled.
   enabled: true
+  # -- PVC requested storage size.
+  # @param persistence.size PersistentVolumeClaim size.
   size: 1Gi
+  # -- StorageClass name for the PVC.
+  # @param persistence.storageClassName StorageClass name for PVC.
   storageClassName: ""
-  # If you want to use an existing PVC
+  # -- Existing PersistentVolumeClaim to use instead of creating one.
+  # @param persistence.existingClaim Existing PVC name.
   existingClaim: ""

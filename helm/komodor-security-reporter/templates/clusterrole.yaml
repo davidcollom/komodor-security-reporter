@@ -56,4 +56,14 @@ rules:
       - events
     verbs:
       - create
+
+  # Read Trivy Operator vulnerability reports
+  - apiGroups: ["aquasecurity.github.io"]
+    resources:
+      - vulnerabilityreports
+      - clustervulnerabilityreports
+    verbs:
+      - get
+      - list
+      - watch
 {{- end }}

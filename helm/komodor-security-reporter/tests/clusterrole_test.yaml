@@ -1,0 +1,30 @@
+suite: clusterrole
+templates:
+  - templates/clusterrole.yaml
+tests:
+  - it: grants read access to trivy operator vulnerability report resources
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - aquasecurity.github.io
+            resources:
+              - vulnerabilityreports
+              - clustervulnerabilityreports
+            verbs:
+              - get
+              - list
+              - watch
+
+  - it: still grants create access for Kubernetes events
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - ""
+            resources:
+              - events
+            verbs:
+              - create
