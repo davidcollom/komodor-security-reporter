@@ -62,11 +62,12 @@ scanners:
     #     # - clustervulnerabilityreports
 
 publishing:
+  # Publish mode: komodor, events, or both.
+  mode: komodor
   minimumSeverity: high
   includeTopFindings: 5
   publishCleanScans: false
   dedupeTTL: 24h
 
 komodor:
-  enabled: true
   baseURL: https://api.komodor.io

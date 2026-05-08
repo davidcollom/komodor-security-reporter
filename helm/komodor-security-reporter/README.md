@@ -23,7 +23,6 @@ Kubernetes-native image vulnerability watcher for Komodor
 | affinity | object | `{}` |  |
 | config.clusterName | string | `"cluster-1"` |  |
 | config.komodor.baseURL | string | `"https://app.komodor.io"` |  |
-| config.komodor.enabled | bool | `true` |  |
 | config.namespaces.exclude[0] | string | `"kube-system"` |  |
 | config.namespaces.exclude[1] | string | `"kube-node-lease"` |  |
 | config.namespaces.include[0] | string | `"production"` |  |
@@ -31,6 +30,7 @@ Kubernetes-native image vulnerability watcher for Komodor
 | config.publishing.dedupeTTL | string | `"24h"` |  |
 | config.publishing.includeTopFindings | int | `5` |  |
 | config.publishing.minimumSeverity | string | `"high"` |  |
+| config.publishing.mode | string | `"komodor"` |  |
 | config.publishing.publishCleanScans | bool | `false` |  |
 | config.registry.resolveDigest | bool | `true` |  |
 | config.scanners.scanners[0].command.binary | string | `"/usr/local/bin/trivy"` |  |

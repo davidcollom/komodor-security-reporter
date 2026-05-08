@@ -18,6 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -146,9 +147,11 @@ func (r *Reconciler) resolveNamespaces(ctx context.Context) ([]string, error) {
 
 // workloadInfo represents a discovered workload.
 type workloadInfo struct {
-	Kind    string
-	Name    string
-	PodSpec *corev1.PodSpec
+	Kind       string
+	Name       string
+	UID        string
+	APIVersion string
+	PodSpec    *corev1.PodSpec
 }
 
 type workloadExecutionState struct {
@@ -191,9 +194,11 @@ func (r *Reconciler) listWorkloads(ctx context.Context, namespace, kind string) 
 		for i := range deployments.Items {
 			dep := &deployments.Items[i]
 			workloads = append(workloads, workloadInfo{
-				Kind:    "Deployment",
-				Name:    dep.Name,
-				PodSpec: &dep.Spec.Template.Spec,
+				Kind:       "Deployment",
+				Name:       dep.Name,
+				UID:        string(dep.UID),
+				APIVersion: "apps/v1",
+				PodSpec:    &dep.Spec.Template.Spec,
 			})
 		}
 
@@ -206,9 +211,11 @@ func (r *Reconciler) listWorkloads(ctx context.Context, namespace, kind string) 
 		for i := range statefulsets.Items {
 			ss := &statefulsets.Items[i]
 			workloads = append(workloads, workloadInfo{
-				Kind:    "StatefulSet",
-				Name:    ss.Name,
-				PodSpec: &ss.Spec.Template.Spec,
+				Kind:       "StatefulSet",
+				Name:       ss.Name,
+				UID:        string(ss.UID),
+				APIVersion: "apps/v1",
+				PodSpec:    &ss.Spec.Template.Spec,
 			})
 		}
 
@@ -221,9 +228,11 @@ func (r *Reconciler) listWorkloads(ctx context.Context, namespace, kind string) 
 		for i := range daemonsets.Items {
 			ds := &daemonsets.Items[i]
 			workloads = append(workloads, workloadInfo{
-				Kind:    "DaemonSet",
-				Name:    ds.Name,
-				PodSpec: &ds.Spec.Template.Spec,
+				Kind:       "DaemonSet",
+				Name:       ds.Name,
+				UID:        string(ds.UID),
+				APIVersion: "apps/v1",
+				PodSpec:    &ds.Spec.Template.Spec,
 			})
 		}
 	}
@@ -368,6 +377,8 @@ func (r *Reconciler) runScannerForImage(
 		Namespace:   namespace,
 		Kind:        wl.Kind,
 		Name:        wl.Name,
+		UID:         wl.UID,
+		APIVersion:  wl.APIVersion,
 		Container:   extractedImg.ContainerName,
 	}
 
@@ -424,16 +435,42 @@ func (r *Reconciler) handleScanResultStateAndPublish(
 		return
 	}
 
-	event := komodor.EventFromScanResult(scanResult, workloadCtx, eventOpts)
-	if err := r.publisher.Publish(ctx, event); err != nil {
-		scannerLog.WithError(err).Warn("failed to publish event")
-		r.metrics.EventPublishErrorsTotal.Inc()
+	publishedCount := 0
+	mode := r.cfg.Publishing.Mode
 
+	if config.PublishToKomodor(mode) {
+		if r.publisher == nil {
+			scannerLog.Warn("Komodor publisher is not configured")
+			r.metrics.EventPublishErrorsTotal.Inc()
+		} else {
+			event := komodor.EventFromScanResult(scanResult, workloadCtx, eventOpts)
+			if err := r.publisher.Publish(ctx, event); err != nil {
+				scannerLog.WithError(err).Warn("failed to publish Komodor event")
+				r.metrics.EventPublishErrorsTotal.Inc()
+			} else {
+				publishedCount++
+			}
+		}
+	}
+
+	if config.PublishToEvents(mode) {
+		if err := r.publishKubernetesEvent(ctx, scanner, scanResult, workloadCtx); err != nil {
+			scannerLog.WithError(err).Warn("failed to publish Kubernetes event")
+			r.metrics.EventPublishErrorsTotal.Inc()
+		} else {
+			publishedCount++
+		}
+	}
+
+	if publishedCount == 0 {
 		return
 	}
 
 	r.metrics.EventsPublishedTotal.Inc()
-	scannerLog.Info("event published")
+	scannerLog.WithFields(logrus.Fields{
+		"mode":          mode,
+		"publish_count": publishedCount,
+	}).Info("event published")
 
 	stateEntry := &state.Entry{
 		Fingerprint:       policy.Fingerprint(scanResult),
@@ -450,6 +487,76 @@ func (r *Reconciler) handleScanResultStateAndPublish(
 
 	r.metrics.StateUpdatesTotal.WithLabelValues("success").Inc()
 	scannerLog.WithFields(logrus.Fields{"state_key": stateKey, "summary": stateEntry.Summary}).Debug("updated state entry")
+}
+
+func (r *Reconciler) publishKubernetesEvent(
+	ctx context.Context,
+	scanner scanners.Scanner,
+	scanResult *scanners.ScanResult,
+	workloadCtx komodor.WorkloadContext,
+) error {
+	if r.clientset == nil {
+		return fmt.Errorf("kubernetes clientset is not configured")
+	}
+
+	eventType := corev1.EventTypeNormal
+	if scanResult.Summary.Total() > 0 {
+		eventType = corev1.EventTypeWarning
+	}
+
+	summary := fmt.Sprintf(
+		"critical=%d high=%d medium=%d low=%d total=%d",
+		scanResult.Summary.Critical,
+		scanResult.Summary.High,
+		scanResult.Summary.Medium,
+		scanResult.Summary.Low,
+		scanResult.Summary.Total(),
+	)
+
+	message := fmt.Sprintf(
+		"summary=%q scanner=%s image=%s findings=%d (critical=%d high=%d medium=%d low=%d)",
+		summary,
+		scanner.Name(),
+		scanResult.Image.Resolved,
+		scanResult.Summary.Total(),
+		scanResult.Summary.Critical,
+		scanResult.Summary.High,
+		scanResult.Summary.Medium,
+		scanResult.Summary.Low,
+	)
+
+	now := v1.NewTime(scanResult.ScannedAt.UTC())
+
+	_, err := r.clientset.CoreV1().Events(workloadCtx.Namespace).Create(ctx, &corev1.Event{
+		ObjectMeta: v1.ObjectMeta{
+			Namespace:    workloadCtx.Namespace,
+			GenerateName: "komodor-security-report-",
+		},
+		InvolvedObject: corev1.ObjectReference{
+			Kind:       workloadCtx.Kind,
+			Namespace:  workloadCtx.Namespace,
+			Name:       workloadCtx.Name,
+			UID:        types.UID(workloadCtx.UID),
+			APIVersion: workloadCtx.APIVersion,
+		},
+		Reason:              "VulnerabilityScan",
+		Action:              "Scan",
+		Message:             message,
+		Type:                eventType,
+		FirstTimestamp:      now,
+		LastTimestamp:       now,
+		EventTime:           v1.NewMicroTime(scanResult.ScannedAt.UTC()),
+		ReportingController: "komodor-security-reporter",
+		ReportingInstance:   workloadCtx.Name,
+		Source: corev1.EventSource{
+			Component: "komodor-security-reporter",
+		},
+	}, v1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("create kubernetes event: %w", err)
+	}
+
+	return nil
 }
 
 func (r *Reconciler) cleanupPreviousDigestState(ctx context.Context, scannerLog *logrus.Entry, latestDigestKey, stateKey string) {

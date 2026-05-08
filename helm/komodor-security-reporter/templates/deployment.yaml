@@ -37,12 +37,14 @@ spec:
             - /etc/komodor-security-reporter/config.yaml
             - -log-level
             - {{ .Values.logging.level }}
+            {{- if or (eq .Values.config.publishing.mode "komodor") (eq .Values.config.publishing.mode "both") }}
           env:
             - name: KOMODOR_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.komodor.secretName }}
                   key: api-key
+            {{- end }}
           ports:
             - name: metrics
               containerPort: {{ .Values.metrics.port }}

@@ -26,10 +26,13 @@ import (
 )
 
 var (
-	configFile  string
-	metricsAddr string
-	logLevel    string
-	kubeconfig  string
+	configFile     string
+	metricsAddr    string
+	logLevel       string
+	logFormat      string
+	kubeconfig     string
+	publishMode    string
+	publishModeSet bool
 )
 
 func main() {
@@ -46,6 +49,7 @@ func newRootCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			publishModeSet = cmd.Flags().Changed("publish-mode")
 			return run()
 		},
 	}
@@ -53,14 +57,20 @@ func newRootCommand() *cobra.Command {
 	cmd.Flags().StringVar(&configFile, "config", "/etc/komodor-security-reporter/config.yaml", "Path to configuration file")
 	cmd.Flags().StringVar(&metricsAddr, "metrics-bind-address", ":8081", "The address the metric endpoint binds to")
 	cmd.Flags().StringVar(&logLevel, "log-level", "info", "Log level (debug, info, warn, error)")
+	cmd.Flags().StringVar(&logFormat, "log-format", "json", "Log format: json or text")
 	cmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig file (for local development; uses in-cluster config in production)")
+	cmd.Flags().StringVar(&publishMode, "publish-mode", "komodor", "Publishing mode: komodor, events, or both")
 
 	return cmd
 }
 
 func run() error {
 	// Setup logging (logrus for application, wrapped for controller-runtime)
-	log := setupLogging(logLevel)
+	log, err := setupLogging(logLevel, logFormat)
+	if err != nil {
+		return err
+	}
+
 	ctrl.SetLogger(logrusr.New(log))
 
 	log.Info("Starting Komodor Image Vulnerability Watcher")
@@ -146,6 +156,14 @@ func loadAndValidateConfig() (*config.Config, error) {
 		return nil, fmt.Errorf("validate configuration: %w", err)
 	}
 
+	if publishModeSet {
+		cfg.Publishing.Mode = publishMode
+
+		if err := cfg.Validate(); err != nil {
+			return nil, fmt.Errorf("validate configuration with publish mode override: %w", err)
+		}
+	}
+
 	return cfg, nil
 }
 
@@ -176,21 +194,29 @@ func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logr
 		return nil, fmt.Errorf("create scanner registry: %w", err)
 	}
 
-	apiKey, err := loadKomodorAPIKey()
-	if err != nil {
-		return nil, err
+	var publisher *komodor.Publisher
+
+	if config.PublishToKomodor(cfg.Publishing.Mode) {
+		apiKey, err := loadKomodorAPIKey()
+		if err != nil {
+			return nil, err
+		}
+
+		komodorClient := komodor.NewClient(cfg.Komodor.BaseURL, apiKey, log)
+
+		validationCtx, cancelValidation := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancelValidation()
+
+		if err := komodorClient.ValidateAPIKey(validationCtx); err != nil {
+			return nil, fmt.Errorf("validate Komodor API key: %w", err)
+		}
+
+		log.Info("validated Komodor API key")
+
+		publisher = komodor.NewPublisher(komodorClient)
+	} else {
+		log.WithField("mode", cfg.Publishing.Mode).Info("Komodor API publishing disabled by mode")
 	}
-
-	komodorClient := komodor.NewClient(cfg.Komodor.BaseURL, apiKey, log)
-
-	validationCtx, cancelValidation := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancelValidation()
-
-	if err := komodorClient.ValidateAPIKey(validationCtx); err != nil {
-		return nil, fmt.Errorf("validate Komodor API key: %w", err)
-	}
-
-	log.Info("validated Komodor API key")
 
 	clientset, err := kubernetes.NewForConfig(k8sConfig)
 	if err != nil {
@@ -201,13 +227,13 @@ func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logr
 		imageExtractor:  controller.NewImageExtractor(),
 		resolver:        registry.NewResolver(log),
 		scannerRegistry: scannerRegistry,
-		publisher:       komodor.NewPublisher(komodorClient),
+		publisher:       publisher,
 		clientset:       clientset,
 		stateStore:      state.NewStore(clientset, "default", "komodor-security-reporter-state", cfg.State.TTL),
 	}, nil
 }
 
-func setupLogging(level string) logrus.FieldLogger {
+func setupLogging(level, format string) (logrus.FieldLogger, error) {
 	l := logrus.New()
 	l.SetOutput(os.Stdout)
 
@@ -218,11 +244,19 @@ func setupLogging(level string) logrus.FieldLogger {
 
 	l.SetLevel(lvl)
 
-	l.SetFormatter(&logrus.JSONFormatter{
-		TimestampFormat: time.RFC3339,
-	})
+	switch format {
+	case "", "json":
+		l.SetFormatter(&logrus.JSONFormatter{TimestampFormat: time.RFC3339})
+	case "text":
+		l.SetFormatter(&logrus.TextFormatter{
+			FullTimestamp:   true,
+			TimestampFormat: time.RFC3339,
+		})
+	default:
+		return nil, fmt.Errorf("invalid log format %q: supported values are json and text", format)
+	}
 
-	return l
+	return l, nil
 }
 
 func loadKomodorAPIKey() (string, error) {

@@ -84,20 +84,20 @@ scanners:
 
 # Publishing policies
 publishing:
+  mode: komodor
   minimumSeverity: high
   includeTopFindings: 5
   publishCleanScans: false
   dedupeTTL: 24h
 
 komodor:
-  enabled: true
   baseURL: https://app.komodor.io
 ```
 
 ### Running Locally
 
 ```bash
-# Set Komodor API key
+# Set Komodor API key (required for publish mode: komodor or both)
 export KOMODOR_API_KEY=your-api-key
 
 # Run with config
@@ -279,6 +279,36 @@ Prometheus metrics are exposed on `:8080/metrics`:
 - `image_vuln_watcher_events_published_total` - Events published
 - `image_vuln_watcher_event_publish_errors_total` - Publishing failures
 - `image_vuln_watcher_dedupe_hits_total` - Deduplicated events
+
+## Debugging Kubernetes Events
+
+When running with `--publish-mode=events` or `--publish-mode=both`, the reporter creates native Kubernetes `Warning` Events on the affected workload. You can inspect these with `kubectl`:
+
+```bash
+# List all VulnerabilityScan events across all namespaces
+kubectl get events -A --field-selector reason=VulnerabilityScan
+
+# Filter to a specific namespace
+kubectl get events -n <namespace> --field-selector reason=VulnerabilityScan
+
+# Watch events in real time
+kubectl get events -A --field-selector reason=VulnerabilityScan -w
+
+# Show full event details for a specific workload
+kubectl describe deployment/<name> -n <namespace> | grep -A5 VulnerabilityScan
+
+# Filter by the reporting component
+kubectl get events -A \
+  --field-selector reportingComponent=komodor-security-reporter
+```
+
+Events use `reason=VulnerabilityScan` and `type=Warning` (or `Normal` for clean scans). The `MESSAGE` column contains the vulnerability summary, e.g.:
+
+```plain
+summary="critical=3 high=21 medium=16 low=1 total=49" scanner=trivy image=... findings=49 (critical=3 high=21 medium=16 low=1)
+```
+
+> **Note:** For human-readable local output, add `--log-format=text` to the reporter flags.
 
 ## Logging
 

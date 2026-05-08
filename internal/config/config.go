@@ -2,7 +2,15 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
+)
+
+// Publishing mode constants control where scan findings are sent.
+const (
+	PublishingModeKomodor = "komodor"
+	PublishingModeEvents  = "events"
+	PublishingModeBoth    = "both"
 )
 
 // Config represents the watcher configuration.
@@ -61,6 +69,7 @@ type CommandConfig struct {
 
 // PublishingConfig defines event publishing policies.
 type PublishingConfig struct {
+	Mode               string
 	MinimumSeverity    string
 	IncludeTopFindings int
 	PublishCleanScans  bool
@@ -69,7 +78,6 @@ type PublishingConfig struct {
 
 // KomodorConfig defines Komodor integration settings.
 type KomodorConfig struct {
-	Enabled bool
 	BaseURL string
 }
 
@@ -91,11 +99,58 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("state.ttl must be greater than 0")
 	}
 
-	if err := validateKomodor(c.Komodor); err != nil {
+	if err := validatePublishing(c.Publishing); err != nil {
 		return err
 	}
 
+	if PublishToKomodor(c.Publishing.Mode) {
+		if err := validateKomodor(c.Komodor); err != nil {
+			return err
+		}
+	}
+
+	if !PublishToKomodor(c.Publishing.Mode) && !PublishToEvents(c.Publishing.Mode) {
+		return fmt.Errorf("publishing.mode must enable at least one publisher")
+	}
+
 	return nil
+}
+
+func validatePublishing(publishing PublishingConfig) error {
+	if !isValidPublishingMode(publishing.Mode) {
+		return fmt.Errorf("publishing.mode must be one of: %s, %s, %s", PublishingModeKomodor, PublishingModeEvents, PublishingModeBoth)
+	}
+
+	return nil
+}
+
+func isValidPublishingMode(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", PublishingModeKomodor, PublishingModeEvents, PublishingModeBoth:
+		return true
+	default:
+		return false
+	}
+}
+
+// PublishToKomodor returns true when Komodor API publishing is enabled for the mode.
+func PublishToKomodor(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", PublishingModeKomodor, PublishingModeBoth:
+		return true
+	default:
+		return false
+	}
+}
+
+// PublishToEvents returns true when Kubernetes Event publishing is enabled for the mode.
+func PublishToEvents(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case PublishingModeEvents, PublishingModeBoth:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateWorkloadKinds(kinds []string) error {
@@ -146,10 +201,6 @@ func validateScanners(scanners ScannersConfig) error {
 }
 
 func validateKomodor(komodor KomodorConfig) error {
-	if !komodor.Enabled {
-		return fmt.Errorf("komodor.enabled must be true")
-	}
-
 	if komodor.BaseURL == "" {
 		return fmt.Errorf("komodor.baseURL is required")
 	}

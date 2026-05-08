@@ -93,13 +93,13 @@ config:
           timeout: 5m
 
   publishing:
+    mode: komodor
     minimumSeverity: high
     includeTopFindings: 5
     publishCleanScans: false
     dedupeTTL: 24h
 
   komodor:
-    enabled: true
     baseURL: https://app.komodor.io
 
 # Komodor credentials

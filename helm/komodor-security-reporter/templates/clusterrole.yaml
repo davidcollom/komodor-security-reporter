@@ -49,4 +49,11 @@ rules:
       - create
       - update
       - patch
+
+  # Publish Kubernetes native events
+  - apiGroups: [""]
+    resources:
+      - events
+    verbs:
+      - create
 {{- end }}

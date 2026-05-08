@@ -32,6 +32,8 @@ type WorkloadContext struct {
 	Namespace   string
 	Kind        string
 	Name        string
+	UID         string
+	APIVersion  string
 	Container   string
 }
 

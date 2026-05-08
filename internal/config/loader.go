@@ -39,13 +39,13 @@ type rawConfig struct {
 		} `yaml:"scanners"`
 	} `yaml:"scanners"`
 	Publishing struct {
+		Mode               string `yaml:"mode"`
 		MinimumSeverity    string `yaml:"minimumSeverity"`
 		IncludeTopFindings int    `yaml:"includeTopFindings"`
 		PublishCleanScans  bool   `yaml:"publishCleanScans"`
 		DeduplicateTTL     string `yaml:"dedupeTTL"`
 	} `yaml:"publishing"`
 	Komodor struct {
-		Enabled bool   `yaml:"enabled"`
 		BaseURL string `yaml:"baseURL"`
 	} `yaml:"komodor"`
 }
@@ -85,7 +85,6 @@ func convertToConfig(raw rawConfig) (*Config, error) {
 		},
 		State: StateConfig{},
 		Komodor: KomodorConfig{
-			Enabled: raw.Komodor.Enabled,
 			BaseURL: raw.Komodor.BaseURL,
 		},
 	}
@@ -148,10 +147,15 @@ func convertToConfig(raw rawConfig) (*Config, error) {
 	}
 
 	cfg.Publishing = PublishingConfig{
+		Mode:               raw.Publishing.Mode,
 		MinimumSeverity:    raw.Publishing.MinimumSeverity,
 		IncludeTopFindings: raw.Publishing.IncludeTopFindings,
 		PublishCleanScans:  raw.Publishing.PublishCleanScans,
 		DeduplicateTTL:     deduplicateTTL,
+	}
+
+	if cfg.Publishing.Mode == "" {
+		cfg.Publishing.Mode = PublishingModeKomodor
 	}
 
 	if err := cfg.Validate(); err != nil {
