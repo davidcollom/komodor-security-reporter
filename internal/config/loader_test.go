@@ -27,7 +27,6 @@ scanners:
       command:
         binary: /usr/bin/trivy
 komodor:
-  enabled: true
   baseURL: https://app.komodor.io
 `)
 
@@ -75,7 +74,6 @@ scanners:
       command:
         binary: /usr/bin/trivy
 komodor:
-  enabled: true
   baseURL: https://app.komodor.io
 `)
 
@@ -104,7 +102,6 @@ scanners:
       command:
         timeout: 10s
 komodor:
-  enabled: true
   baseURL: https://app.komodor.io
 `)
 
@@ -128,7 +125,6 @@ scanners:
       type: trivy
       enabled: true
 komodor:
-  enabled: true
   baseURL: https://app.komodor.io
 `)
 
@@ -153,7 +149,6 @@ scanners:
         binary: /usr/bin/trivy
         timeout: 10s
 komodor:
-  enabled: true
   baseURL: https://app.komodor.io
 `)
 
@@ -178,7 +173,6 @@ scanners:
         binary: /usr/bin/trivy
         timeout: invalid
 komodor:
-  enabled: true
   baseURL: https://app.komodor.io
 `)
 
@@ -202,7 +196,6 @@ scanners:
       command:
         timeout: 10s
 komodor:
-  enabled: true
   baseURL: https://app.komodor.io
 `)
 
@@ -228,7 +221,6 @@ scanners:
         - vulnerabilityreports
         - clustervulnerabilityreports
 komodor:
-  enabled: true
   baseURL: https://app.komodor.io
 `)
 
@@ -251,8 +243,6 @@ scanners:
       enabled: true
 publishing:
   mode: events
-komodor:
-  enabled: false
 `)
 
 	cfg, err := LoadFromBytes(yaml)

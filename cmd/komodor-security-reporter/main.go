@@ -26,12 +26,13 @@ import (
 )
 
 var (
-	configFile  string
-	metricsAddr string
-	logLevel    string
-	logFormat   string
-	kubeconfig  string
-	publishMode string
+	configFile     string
+	metricsAddr    string
+	logLevel       string
+	logFormat      string
+	kubeconfig     string
+	publishMode    string
+	publishModeSet bool
 )
 
 func main() {
@@ -48,6 +49,7 @@ func newRootCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			publishModeSet = cmd.Flags().Changed("publish-mode")
 			return run()
 		},
 	}
@@ -154,7 +156,7 @@ func loadAndValidateConfig() (*config.Config, error) {
 		return nil, fmt.Errorf("validate configuration: %w", err)
 	}
 
-	if publishMode != "" {
+	if publishModeSet {
 		cfg.Publishing.Mode = publishMode
 
 		if err := cfg.Validate(); err != nil {

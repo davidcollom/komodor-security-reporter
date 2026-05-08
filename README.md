@@ -91,7 +91,6 @@ publishing:
   dedupeTTL: 24h
 
 komodor:
-  enabled: true
   baseURL: https://app.komodor.io
 ```
 

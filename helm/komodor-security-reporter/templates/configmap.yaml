@@ -47,5 +47,4 @@ data:
       dedupeTTL: {{ $config.publishing.dedupeTTL | quote }}
 
     komodor:
-      enabled: {{ $config.komodor.enabled }}
-      baseURL: {{ $config.komodor.baseURL | quote }}
+      baseURL: {{ $config.komodor.baseURL | default "https://app.komodor.io" | quote }}

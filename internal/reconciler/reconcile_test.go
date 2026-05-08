@@ -68,14 +68,16 @@ func TestPublishKubernetesEventCreatesEvent(t *testing.T) {
 		&scanners.ScanResult{
 			Image: scanners.ImageRef{Resolved: "docker.io/library/nginx@sha256:abc"},
 			Summary: scanners.VulnerabilitySummary{
-				High: 1,
+				Medium: 1,
 			},
 			ScannedAt: scannedAt,
 		},
 		komodor.WorkloadContext{
-			Namespace: "default",
-			Kind:      "Deployment",
-			Name:      "nginx",
+			Namespace:  "default",
+			Kind:       "Deployment",
+			Name:       "nginx",
+			UID:        "uid-123",
+			APIVersion: "apps/v1",
 		},
 	)
 	require.NoError(t, err)
@@ -87,7 +89,9 @@ func TestPublishKubernetesEventCreatesEvent(t *testing.T) {
 	ev := events.Items[0]
 	require.Equal(t, "VulnerabilityScan", ev.Reason)
 	require.Equal(t, corev1.EventTypeWarning, ev.Type)
-	require.True(t, strings.Contains(ev.Message, "summary=\"critical=0 high=1 medium=0 low=0 total=1\""))
+	require.True(t, strings.Contains(ev.Message, "summary=\"critical=0 high=0 medium=1 low=0 total=1\""))
+	require.Equal(t, "uid-123", string(ev.InvolvedObject.UID))
+	require.Equal(t, "apps/v1", ev.InvolvedObject.APIVersion)
 	require.False(t, ev.FirstTimestamp.IsZero(), "FirstTimestamp must be set")
 	require.False(t, ev.LastTimestamp.IsZero(), "LastTimestamp must be set")
 	require.Equal(t, scannedAt, ev.FirstTimestamp.UTC())

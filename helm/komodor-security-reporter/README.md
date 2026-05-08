@@ -23,7 +23,6 @@ Kubernetes-native image vulnerability watcher for Komodor
 | affinity | object | `{}` |  |
 | config.clusterName | string | `"cluster-1"` |  |
 | config.komodor.baseURL | string | `"https://app.komodor.io"` |  |
-| config.komodor.enabled | bool | `true` |  |
 | config.namespaces.exclude[0] | string | `"kube-system"` |  |
 | config.namespaces.exclude[1] | string | `"kube-node-lease"` |  |
 | config.namespaces.include[0] | string | `"production"` |  |

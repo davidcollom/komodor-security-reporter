@@ -18,6 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -146,9 +147,11 @@ func (r *Reconciler) resolveNamespaces(ctx context.Context) ([]string, error) {
 
 // workloadInfo represents a discovered workload.
 type workloadInfo struct {
-	Kind    string
-	Name    string
-	PodSpec *corev1.PodSpec
+	Kind       string
+	Name       string
+	UID        string
+	APIVersion string
+	PodSpec    *corev1.PodSpec
 }
 
 type workloadExecutionState struct {
@@ -191,9 +194,11 @@ func (r *Reconciler) listWorkloads(ctx context.Context, namespace, kind string) 
 		for i := range deployments.Items {
 			dep := &deployments.Items[i]
 			workloads = append(workloads, workloadInfo{
-				Kind:    "Deployment",
-				Name:    dep.Name,
-				PodSpec: &dep.Spec.Template.Spec,
+				Kind:       "Deployment",
+				Name:       dep.Name,
+				UID:        string(dep.UID),
+				APIVersion: "apps/v1",
+				PodSpec:    &dep.Spec.Template.Spec,
 			})
 		}
 
@@ -206,9 +211,11 @@ func (r *Reconciler) listWorkloads(ctx context.Context, namespace, kind string) 
 		for i := range statefulsets.Items {
 			ss := &statefulsets.Items[i]
 			workloads = append(workloads, workloadInfo{
-				Kind:    "StatefulSet",
-				Name:    ss.Name,
-				PodSpec: &ss.Spec.Template.Spec,
+				Kind:       "StatefulSet",
+				Name:       ss.Name,
+				UID:        string(ss.UID),
+				APIVersion: "apps/v1",
+				PodSpec:    &ss.Spec.Template.Spec,
 			})
 		}
 
@@ -221,9 +228,11 @@ func (r *Reconciler) listWorkloads(ctx context.Context, namespace, kind string) 
 		for i := range daemonsets.Items {
 			ds := &daemonsets.Items[i]
 			workloads = append(workloads, workloadInfo{
-				Kind:    "DaemonSet",
-				Name:    ds.Name,
-				PodSpec: &ds.Spec.Template.Spec,
+				Kind:       "DaemonSet",
+				Name:       ds.Name,
+				UID:        string(ds.UID),
+				APIVersion: "apps/v1",
+				PodSpec:    &ds.Spec.Template.Spec,
 			})
 		}
 	}
@@ -368,6 +377,8 @@ func (r *Reconciler) runScannerForImage(
 		Namespace:   namespace,
 		Kind:        wl.Kind,
 		Name:        wl.Name,
+		UID:         wl.UID,
+		APIVersion:  wl.APIVersion,
 		Container:   extractedImg.ContainerName,
 	}
 
@@ -489,7 +500,7 @@ func (r *Reconciler) publishKubernetesEvent(
 	}
 
 	eventType := corev1.EventTypeNormal
-	if scanResult.Summary.Critical > 0 || scanResult.Summary.High > 0 {
+	if scanResult.Summary.Total() > 0 {
 		eventType = corev1.EventTypeWarning
 	}
 
@@ -522,9 +533,11 @@ func (r *Reconciler) publishKubernetesEvent(
 			GenerateName: "komodor-security-report-",
 		},
 		InvolvedObject: corev1.ObjectReference{
-			Kind:      workloadCtx.Kind,
-			Namespace: workloadCtx.Namespace,
-			Name:      workloadCtx.Name,
+			Kind:       workloadCtx.Kind,
+			Namespace:  workloadCtx.Namespace,
+			Name:       workloadCtx.Name,
+			UID:        types.UID(workloadCtx.UID),
+			APIVersion: workloadCtx.APIVersion,
 		},
 		Reason:              "VulnerabilityScan",
 		Action:              "Scan",

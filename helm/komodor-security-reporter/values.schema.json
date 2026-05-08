@@ -24,15 +24,9 @@
               "default": "https://app.komodor.io",
               "title": "baseURL",
               "type": "string"
-            },
-            "enabled": {
-              "default": true,
-              "title": "enabled",
-              "type": "boolean"
             }
           },
           "required": [
-            "enabled",
             "baseURL"
           ],
           "title": "komodor",
