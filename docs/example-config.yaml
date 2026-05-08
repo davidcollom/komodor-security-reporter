@@ -3,8 +3,8 @@ clusterName: sophos-cert-manager-loadtest
 
 namespaces:
   # include:
-    # - production
-    # - platform
+  #   - production
+  #   - platform
   exclude:
     - kube-system
     - kube-node-lease

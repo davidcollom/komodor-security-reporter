@@ -1,0 +1,9 @@
+nodeCollector:
+  useNodeSelector: false
+operator:
+  configAuditScannerEnabled: false
+  exposedSecretScannerEnabled: false
+  infraAssessmentScannerEnabled: false
+  rbacAssessmentScannerEnabled: false
+
+excludeNamespaces: "kube-*,gke-*,gmp-*,config-management-system,gatekeeper-system,cnrm-system,istio-system"

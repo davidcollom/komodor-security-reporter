@@ -333,3 +333,15 @@ func TestPublishingModeHelpers(t *testing.T) {
 	require.True(t, PublishToEvents(PublishingModeEvents))
 	require.True(t, PublishToEvents(PublishingModeBoth))
 }
+
+func TestEnabledScanners(t *testing.T) {
+	cfg := &Config{
+		Scanners: ScannersConfig{Scanners: []ScannerConfig{
+			{Name: "trivy", Type: "trivy", Enabled: true},
+			{Name: "clair", Type: "clair", Enabled: false},
+			{Name: "wiz", Type: "wiz", Enabled: true},
+		}},
+	}
+
+	require.Equal(t, []string{"trivy (trivy)", "wiz (wiz)"}, cfg.EnabledScanners())
+}

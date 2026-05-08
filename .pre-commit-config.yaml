@@ -76,6 +76,7 @@ repos:
           - gzip
         # for all available options: helm-schema -h
         args:
+          - -p
           # directory to search recursively within for charts
           - --chart-search-root=helm
           # don't analyze dependencies

@@ -6,45 +6,4 @@ metadata:
     {{- include "komodor-security-reporter.labels" . | nindent 4 }}
 data:
   config.yaml: |
-    {{- $config := .Values.config }}
-    clusterName: {{ $config.clusterName | quote }}
-
-    namespaces:
-      include:
-        {{- range $config.namespaces.include }}
-        - {{ . | quote }}
-        {{- end }}
-      exclude:
-        {{- range $config.namespaces.exclude }}
-        - {{ . | quote }}
-        {{- end }}
-
-    workloads:
-      kinds:
-        {{- range $config.workloads.kinds }}
-        - {{ . | quote }}
-        {{- end }}
-
-    registry:
-      resolveDigest: {{ $config.registry.resolveDigest }}
-
-    scanners:
-      scanners:
-        {{- range $config.scanners.scanners }}
-        - name: {{ .name | quote }}
-          type: {{ .type | quote }}
-          enabled: {{ .enabled }}
-          command:
-            binary: {{ .command.binary | quote }}
-            timeout: {{ .command.timeout | quote }}
-        {{- end }}
-
-    publishing:
-      mode: {{ $config.publishing.mode | quote }}
-      minimumSeverity: {{ $config.publishing.minimumSeverity | quote }}
-      includeTopFindings: {{ $config.publishing.includeTopFindings }}
-      publishCleanScans: {{ $config.publishing.publishCleanScans }}
-      dedupeTTL: {{ $config.publishing.dedupeTTL | quote }}
-
-    komodor:
-      baseURL: {{ $config.komodor.baseURL | default "https://app.komodor.io" | quote }}
+{{ include "komodor-security-reporter.configYaml" . | nindent 4 }}

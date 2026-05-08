@@ -81,6 +81,21 @@ type KomodorConfig struct {
 	BaseURL string
 }
 
+// EnabledScanners returns a human-readable list of enabled scanners.
+func (c *Config) EnabledScanners() []string {
+	enabled := make([]string, 0, len(c.Scanners.Scanners))
+
+	for _, scanner := range c.Scanners.Scanners {
+		if !scanner.Enabled {
+			continue
+		}
+
+		enabled = append(enabled, fmt.Sprintf("%s (%s)", scanner.Name, scanner.Type))
+	}
+
+	return enabled
+}
+
 // Validate validates the configuration.
 func (c *Config) Validate() error {
 	if c.ClusterName == "" {

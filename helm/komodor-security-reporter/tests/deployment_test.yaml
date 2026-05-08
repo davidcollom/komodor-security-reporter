@@ -1,0 +1,122 @@
+suite: deployment
+templates:
+  - templates/deployment.yaml
+tests:
+  - it: keeps pod-level securityContext free of container-only fields
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 65534
+      - notExists:
+          path: spec.template.spec.securityContext.allowPrivilegeEscalation
+      - notExists:
+          path: spec.template.spec.securityContext.readOnlyRootFilesystem
+      - notExists:
+          path: spec.template.spec.securityContext.capabilities
+
+  - it: does not inject KOMODOR_API_KEY env var in events mode
+    set:
+      config.publishing.mode: events
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[0].name
+          value: POD_NAMESPACE
+      - notExists:
+          path: spec.template.spec.containers[0].env[1]
+
+  - it: injects KOMODOR_API_KEY env var in komodor mode
+    set:
+      config.publishing.mode: komodor
+      komodor.secretName: custom-komodor-secret
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[0].name
+          value: POD_NAMESPACE
+      - equal:
+          path: spec.template.spec.containers[0].env[1].name
+          value: KOMODOR_API_KEY
+      - equal:
+          path: spec.template.spec.containers[0].env[1].valueFrom.secretKeyRef.name
+          value: custom-komodor-secret
+      - equal:
+          path: spec.template.spec.containers[0].env[1].valueFrom.secretKeyRef.key
+          value: api-key
+
+  - it: configures health and metrics bind addresses from chart defaults
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].args[4]
+          value: --metrics-bind-address
+      - equal:
+          path: spec.template.spec.containers[0].args[5]
+          value: :8080
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].name
+          value: metrics
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 8080
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /healthz
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.port
+          value: metrics
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /readyz
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.port
+          value: metrics
+
+  - it: allows overriding full probe maps from values
+    set:
+      livenessProbe:
+        httpGet:
+          path: /live
+          port: metrics
+        initialDelaySeconds: 15
+        periodSeconds: 11
+        timeoutSeconds: 2
+        failureThreshold: 4
+      readinessProbe:
+        httpGet:
+          path: /ready
+          port: metrics
+        initialDelaySeconds: 12
+        periodSeconds: 9
+        timeoutSeconds: 2
+        successThreshold: 2
+        failureThreshold: 4
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /live
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.initialDelaySeconds
+          value: 15
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.failureThreshold
+          value: 4
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /ready
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.periodSeconds
+          value: 9
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.successThreshold
+          value: 2
+
+  - it: allows disabling probes by setting maps to null
+    set:
+      livenessProbe: null
+      readinessProbe: null
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].livenessProbe
+      - notExists:
+          path: spec.template.spec.containers[0].readinessProbe

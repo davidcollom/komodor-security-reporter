@@ -58,3 +58,10 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Render application config.yaml content from values.
+*/}}
+{{- define "komodor-security-reporter.configYaml" -}}
+{{ toYaml .Values.config }}
+{{- end }}

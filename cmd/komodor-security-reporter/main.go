@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/bombsimon/logrusr/v3"
@@ -80,7 +81,11 @@ func run() error {
 		return err
 	}
 
-	log.WithField("cluster", cfg.ClusterName).Info("loaded configuration")
+	log.WithFields(logrus.Fields{
+		"cluster":          cfg.ClusterName,
+		"enabled_scanners": cfg.EnabledScanners(),
+		"config":           fmt.Sprintf("%+v", *cfg),
+	}).Info("loaded configuration")
 
 	k8sConfig, err := controller.LoadKubernetesConfig(log, kubeconfig)
 	if err != nil {
@@ -169,8 +174,11 @@ func loadAndValidateConfig() (*config.Config, error) {
 
 func createManager(k8sConfig *rest.Config) (manager.Manager, error) {
 	mgr, err := ctrl.NewManager(k8sConfig, ctrl.Options{
-		Scheme:  nil,
-		Metrics: server.Options{BindAddress: metricsAddr},
+		Scheme: nil,
+		Metrics: server.Options{
+			BindAddress:   metricsAddr,
+			ExtraHandlers: metricsExtraHandlers(),
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create manager: %w", err)
@@ -223,14 +231,26 @@ func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logr
 		return nil, fmt.Errorf("create Kubernetes clientset: %w", err)
 	}
 
+	stateNamespace := stateStoreNamespace()
+	log.WithField("namespace", stateNamespace).Info("state store namespace configured")
+
 	return &runtimeComponents{
 		imageExtractor:  controller.NewImageExtractor(),
 		resolver:        registry.NewResolver(log),
 		scannerRegistry: scannerRegistry,
 		publisher:       publisher,
 		clientset:       clientset,
-		stateStore:      state.NewStore(clientset, "default", "komodor-security-reporter-state", cfg.State.TTL),
+		stateStore:      state.NewStore(clientset, stateNamespace, "komodor-security-reporter-state", cfg.State.TTL),
 	}, nil
+}
+
+func stateStoreNamespace() string {
+	namespace := strings.TrimSpace(os.Getenv("POD_NAMESPACE"))
+	if namespace == "" {
+		return "default"
+	}
+
+	return namespace
 }
 
 func setupLogging(level, format string) (logrus.FieldLogger, error) {
