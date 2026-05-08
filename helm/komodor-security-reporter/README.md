@@ -31,6 +31,7 @@ Kubernetes-native image vulnerability watcher for Komodor
 | config.publishing.dedupeTTL | string | `"24h"` |  |
 | config.publishing.includeTopFindings | int | `5` |  |
 | config.publishing.minimumSeverity | string | `"high"` |  |
+| config.publishing.mode | string | `"komodor"` |  |
 | config.publishing.publishCleanScans | bool | `false` |  |
 | config.registry.resolveDigest | bool | `true` |  |
 | config.scanners.scanners[0].command.binary | string | `"/usr/local/bin/trivy"` |  |

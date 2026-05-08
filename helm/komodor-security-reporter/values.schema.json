@@ -97,6 +97,11 @@
               "title": "minimumSeverity",
               "type": "string"
             },
+            "mode": {
+              "default": "komodor",
+              "title": "mode",
+              "type": "string"
+            },
             "publishCleanScans": {
               "default": false,
               "title": "publishCleanScans",
@@ -104,6 +109,7 @@
             }
           },
           "required": [
+            "mode",
             "minimumSeverity",
             "includeTopFindings",
             "publishCleanScans",

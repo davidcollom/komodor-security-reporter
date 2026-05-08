@@ -237,3 +237,26 @@ komodor:
 	require.NoError(t, err)
 	require.Equal(t, []string{"vulnerabilityreports", "clustervulnerabilityreports"}, cfg.Scanners.Scanners[0].Resources)
 }
+
+func TestLoadFromBytesParsesPublishingMode(t *testing.T) {
+	yaml := []byte(`
+clusterName: test
+workloads:
+  kinds:
+    - Deployment
+scanners:
+  scanners:
+    - name: trivy
+      type: trivy
+      enabled: true
+publishing:
+  mode: events
+komodor:
+  enabled: false
+`)
+
+	cfg, err := LoadFromBytes(yaml)
+
+	require.NoError(t, err)
+	require.Equal(t, PublishingModeEvents, cfg.Publishing.Mode)
+}

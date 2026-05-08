@@ -40,6 +40,7 @@ data:
         {{- end }}
 
     publishing:
+      mode: {{ $config.publishing.mode | quote }}
       minimumSeverity: {{ $config.publishing.minimumSeverity | quote }}
       includeTopFindings: {{ $config.publishing.includeTopFindings }}
       publishCleanScans: {{ $config.publishing.publishCleanScans }}

@@ -93,6 +93,7 @@ config:
           timeout: 5m
 
   publishing:
+    mode: komodor
     minimumSeverity: high
     includeTopFindings: 5
     publishCleanScans: false

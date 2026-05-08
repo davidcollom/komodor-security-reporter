@@ -60,10 +60,10 @@ komodor:
 	require.Equal(t, "/usr/local/bin/trivy", cfg.Scanners.Scanners[0].Command.Binary)
 	require.Equal(t, 5*time.Minute, cfg.Scanners.Scanners[0].Command.Timeout)
 	require.Equal(t, 72*time.Hour, cfg.State.TTL)
+	require.Equal(t, PublishingModeKomodor, cfg.Publishing.Mode)
 	require.Equal(t, "high", cfg.Publishing.MinimumSeverity)
 	require.Equal(t, 5, cfg.Publishing.IncludeTopFindings)
 	require.Equal(t, 24*time.Hour, cfg.Publishing.DeduplicateTTL)
-	require.True(t, cfg.Komodor.Enabled)
 	require.Equal(t, "https://app.komodor.io", cfg.Komodor.BaseURL)
 }
 
@@ -95,7 +95,6 @@ func TestValidateConfig(t *testing.T) {
 				},
 				State: StateConfig{TTL: 72 * time.Hour},
 				Komodor: KomodorConfig{
-					Enabled: true,
 					BaseURL: "https://app.komodor.io",
 				},
 			},
@@ -120,7 +119,6 @@ func TestValidateConfig(t *testing.T) {
 				},
 				State: StateConfig{TTL: 72 * time.Hour},
 				Komodor: KomodorConfig{
-					Enabled: true,
 					BaseURL: "https://app.komodor.io",
 				},
 			},
@@ -144,14 +142,13 @@ func TestValidateConfig(t *testing.T) {
 				},
 				State: StateConfig{TTL: 72 * time.Hour},
 				Komodor: KomodorConfig{
-					Enabled: true,
 					BaseURL: "https://app.komodor.io",
 				},
 			},
 			wantError: true,
 		},
 		{
-			name: "komodor must be enabled",
+			name: "komodor base url required in komodor mode",
 			config: &Config{
 				ClusterName: "test",
 				Workloads: WorkloadsConfig{
@@ -166,11 +163,8 @@ func TestValidateConfig(t *testing.T) {
 						Command: CommandConfig{Binary: "/usr/bin/trivy"},
 					}},
 				},
-				State: StateConfig{TTL: 72 * time.Hour},
-				Komodor: KomodorConfig{
-					Enabled: false,
-					BaseURL: "https://app.komodor.io",
-				},
+				State:   StateConfig{TTL: 72 * time.Hour},
+				Komodor: KomodorConfig{},
 			},
 			wantError: true,
 		},
@@ -190,10 +184,8 @@ func TestValidateConfig(t *testing.T) {
 						Command: CommandConfig{Binary: "/usr/bin/trivy"},
 					}},
 				},
-				State: StateConfig{TTL: 72 * time.Hour},
-				Komodor: KomodorConfig{
-					Enabled: true,
-				},
+				State:   StateConfig{TTL: 72 * time.Hour},
+				Komodor: KomodorConfig{},
 			},
 			wantError: true,
 		},
@@ -238,7 +230,56 @@ func TestValidateConfig(t *testing.T) {
 				}}},
 				State: StateConfig{TTL: 0},
 				Komodor: KomodorConfig{
+					BaseURL: "https://app.komodor.io",
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "events mode does not require komodor config",
+			config: &Config{
+				ClusterName: "test",
+				Workloads:   WorkloadsConfig{Kinds: []string{"Deployment"}},
+				Scanners: ScannersConfig{Concurrency: 1, Scanners: []ScannerConfig{{
+					Name:    "trivy",
+					Type:    "trivy",
 					Enabled: true,
+				}}},
+				Publishing: PublishingConfig{Mode: PublishingModeEvents},
+				State:      StateConfig{TTL: 72 * time.Hour},
+				Komodor:    KomodorConfig{},
+			},
+			wantError: false,
+		},
+		{
+			name: "both mode requires komodor config",
+			config: &Config{
+				ClusterName: "test",
+				Workloads:   WorkloadsConfig{Kinds: []string{"Deployment"}},
+				Scanners: ScannersConfig{Concurrency: 1, Scanners: []ScannerConfig{{
+					Name:    "trivy",
+					Type:    "trivy",
+					Enabled: true,
+				}}},
+				Publishing: PublishingConfig{Mode: PublishingModeBoth},
+				State:      StateConfig{TTL: 72 * time.Hour},
+				Komodor:    KomodorConfig{},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid publishing mode",
+			config: &Config{
+				ClusterName: "test",
+				Workloads:   WorkloadsConfig{Kinds: []string{"Deployment"}},
+				Scanners: ScannersConfig{Concurrency: 1, Scanners: []ScannerConfig{{
+					Name:    "trivy",
+					Type:    "trivy",
+					Enabled: true,
+				}}},
+				Publishing: PublishingConfig{Mode: "invalid"},
+				State:      StateConfig{TTL: 72 * time.Hour},
+				Komodor: KomodorConfig{
 					BaseURL: "https://app.komodor.io",
 				},
 			},
@@ -260,9 +301,9 @@ func TestValidateConfig(t *testing.T) {
 						Resources: []string{"vulnerabilityreports", ""},
 					}},
 				},
-				State: StateConfig{TTL: 72 * time.Hour},
+				Publishing: PublishingConfig{Mode: PublishingModeKomodor},
+				State:      StateConfig{TTL: 72 * time.Hour},
 				Komodor: KomodorConfig{
-					Enabled: true,
 					BaseURL: "https://app.komodor.io",
 				},
 			},
@@ -280,4 +321,16 @@ func TestValidateConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPublishingModeHelpers(t *testing.T) {
+	require.True(t, PublishToKomodor(""))
+	require.True(t, PublishToKomodor(PublishingModeKomodor))
+	require.True(t, PublishToKomodor(PublishingModeBoth))
+	require.False(t, PublishToKomodor(PublishingModeEvents))
+
+	require.False(t, PublishToEvents(""))
+	require.False(t, PublishToEvents(PublishingModeKomodor))
+	require.True(t, PublishToEvents(PublishingModeEvents))
+	require.True(t, PublishToEvents(PublishingModeBoth))
 }
