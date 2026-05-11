@@ -82,8 +82,37 @@ komodor:
 	require.NoError(t, err)
 	require.Equal(t, 4, cfg.Scanners.Concurrency)
 	require.Equal(t, 72*time.Hour, cfg.State.TTL)
+	require.Equal(t, StateBackendConfigMap, NormalizeStateBackend(cfg.State.Backend))
+	require.Equal(t, "default", cfg.State.Namespace)
 	// Should default to 5 minutes
 	require.Equal(t, 5*time.Minute, cfg.Scanners.Scanners[0].Command.Timeout)
+}
+
+func TestLoadFromBytesParsesStateBackend(t *testing.T) {
+	yaml := []byte(`
+clusterName: test
+workloads:
+  kinds:
+    - Deployment
+state:
+  backend: memory
+  ttl: 48h
+  namespace: reporter-ns
+scanners:
+  scanners:
+    - name: trivy
+      type: trivy
+      enabled: true
+komodor:
+  baseURL: https://app.komodor.io
+`)
+
+	cfg, err := LoadFromBytes(yaml)
+
+	require.NoError(t, err)
+	require.Equal(t, StateBackendMemory, NormalizeStateBackend(cfg.State.Backend))
+	require.Equal(t, 48*time.Hour, cfg.State.TTL)
+	require.Equal(t, "reporter-ns", cfg.State.Namespace)
 }
 
 func TestLoadFromBytesStateTTL(t *testing.T) {

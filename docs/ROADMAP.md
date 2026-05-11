@@ -164,11 +164,14 @@ Release `v1.0.0` after all milestone exit criteria are complete and the followin
 - Labels: `area/state`, `kind/feature`, `priority/p1`
 - Scope:
   - Evaluate ConfigMap viability at scale.
+  - Default to persistent sharded ConfigMap state with a hardened in-memory cache layer.
+  - Support strict readonly operation (no workload mutation, no state writes; Event creation only).
   - Define optional backend strategy (for example SQLite/PVC or external KV) while keeping no-CRD default.
   - Add compaction/pruning and state size telemetry.
 - Acceptance Criteria:
   - State growth is bounded and observable.
   - Strategy decision and migration path documented.
+- Plan: see [state-strategy.md](state-strategy.md)
 - Dependencies: none
 
 #### [v0.next2.0] Performance - Add concurrency controls and adaptive backpressure

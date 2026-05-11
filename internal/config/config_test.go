@@ -59,6 +59,7 @@ komodor:
 	require.Equal(t, "/usr/local/bin/trivy", cfg.Scanners.Scanners[0].Command.Binary)
 	require.Equal(t, 5*time.Minute, cfg.Scanners.Scanners[0].Command.Timeout)
 	require.Equal(t, 72*time.Hour, cfg.State.TTL)
+	require.Equal(t, StateBackendConfigMap, NormalizeStateBackend(cfg.State.Backend))
 	require.Equal(t, PublishingModeKomodor, cfg.Publishing.Mode)
 	require.Equal(t, "high", cfg.Publishing.MinimumSeverity)
 	require.Equal(t, 5, cfg.Publishing.IncludeTopFindings)
@@ -231,6 +232,21 @@ func TestValidateConfig(t *testing.T) {
 				Komodor: KomodorConfig{
 					BaseURL: "https://app.komodor.io",
 				},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid state backend",
+			config: &Config{
+				ClusterName: "test",
+				Workloads:   WorkloadsConfig{Kinds: []string{"Deployment"}},
+				Scanners: ScannersConfig{Concurrency: 1, Scanners: []ScannerConfig{{
+					Name:    "trivy",
+					Type:    "trivy",
+					Enabled: true,
+				}}},
+				State:      StateConfig{Backend: "bad-backend", TTL: 72 * time.Hour},
+				Publishing: PublishingConfig{Mode: PublishingModeEvents},
 			},
 			wantError: true,
 		},

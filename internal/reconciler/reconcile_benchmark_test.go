@@ -15,7 +15,7 @@ import (
 	"github.com/davidcollom/komodor-security-reporter/internal/metrics"
 	"github.com/davidcollom/komodor-security-reporter/internal/registry"
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners"
-	"github.com/davidcollom/komodor-security-reporter/internal/state"
+	stateconfigmap "github.com/davidcollom/komodor-security-reporter/internal/state/backends/configmap"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
@@ -162,7 +162,7 @@ func buildBenchmarkReconciler(b *testing.B, scenario benchmarkScenario, komodorU
 		registry.NewResolver(log),
 		registryMap,
 		komodor.NewPublisher(client),
-		state.NewStore(clientset, namespace, "benchmark-state", cfg.State.TTL),
+		stateconfigmap.NewBackend(clientset, namespace, "benchmark-state", cfg.State.TTL),
 		log,
 		newUnregisteredBenchmarkMetrics(),
 	)

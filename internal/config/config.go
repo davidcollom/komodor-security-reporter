@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+// Supported state backend names.
+const (
+	StateBackendConfigMap = "configmap"
+	StateBackendMemory    = "memory"
+	StateBackendExternal  = "external"
+)
+
 // Publishing mode constants control where scan findings are sent.
 const (
 	PublishingModeKomodor = "komodor"
@@ -15,70 +22,72 @@ const (
 
 // Config represents the watcher configuration.
 type Config struct {
-	ClusterName string
-	Namespaces  NamespaceConfig
-	Workloads   WorkloadsConfig
-	Registry    RegistryConfig
-	Scanners    ScannersConfig
-	State       StateConfig
-	Publishing  PublishingConfig
-	Komodor     KomodorConfig
+	ClusterName string           `mapstructure:"clusterName"`
+	Namespaces  NamespaceConfig  `mapstructure:"namespaces"`
+	Workloads   WorkloadsConfig  `mapstructure:"workloads"`
+	Registry    RegistryConfig   `mapstructure:"registry"`
+	Scanners    ScannersConfig   `mapstructure:"scanners"`
+	State       StateConfig      `mapstructure:"state"`
+	Publishing  PublishingConfig `mapstructure:"publishing"`
+	Komodor     KomodorConfig    `mapstructure:"komodor"`
 }
 
 // NamespaceConfig defines namespace filtering.
 type NamespaceConfig struct {
-	Include []string
-	Exclude []string
+	Include []string `mapstructure:"include"`
+	Exclude []string `mapstructure:"exclude"`
 }
 
 // WorkloadsConfig defines which workload kinds to watch.
 type WorkloadsConfig struct {
-	Kinds []string // Deployment, StatefulSet, DaemonSet, Job, CronJob
+	Kinds []string `mapstructure:"kinds"` // Deployment, StatefulSet, DaemonSet, Job, CronJob
 }
 
 // RegistryConfig defines registry resolution options.
 type RegistryConfig struct {
-	ResolveDigest bool
+	ResolveDigest bool `mapstructure:"resolveDigest"`
 }
 
-// StateConfig defines state storage behavior.
+// StateConfig defines state storage behaviour.
 type StateConfig struct {
-	TTL time.Duration
+	Backend   string        `mapstructure:"backend"`
+	TTL       time.Duration `mapstructure:"ttl"`
+	Namespace string        `mapstructure:"namespace"`
 }
 
 // ScannersConfig defines scanner configurations.
 type ScannersConfig struct {
-	Concurrency int
-	Scanners    []ScannerConfig
+	Concurrency int             `mapstructure:"concurrency"`
+	Scanners    []ScannerConfig `mapstructure:"scanners"`
 }
 
 // ScannerConfig defines a single scanner configuration.
 type ScannerConfig struct {
-	Name      string
-	Type      string // trivy, trivy-operator, clair, snyk, wiz
-	Enabled   bool
-	Resources []string
-	Command   CommandConfig
+	Name      string        `mapstructure:"name"`
+	Type      string        `mapstructure:"type"` // trivy, trivy-operator, clair, snyk, wiz
+	Enabled   bool          `mapstructure:"enabled"`
+	Resources []string      `mapstructure:"resources"`
+	Command   CommandConfig `mapstructure:"command"`
 }
 
 // CommandConfig defines CLI-based scanner configuration.
 type CommandConfig struct {
-	Binary  string
-	Timeout time.Duration
+	Binary  string        `mapstructure:"binary"`
+	Timeout time.Duration `mapstructure:"timeout"`
 }
 
 // PublishingConfig defines event publishing policies.
 type PublishingConfig struct {
-	Mode               string
-	MinimumSeverity    string
-	IncludeTopFindings int
-	PublishCleanScans  bool
-	DeduplicateTTL     time.Duration
+	Mode               string        `mapstructure:"mode"`
+	MinimumSeverity    string        `mapstructure:"minimumSeverity"`
+	IncludeTopFindings int           `mapstructure:"includeTopFindings"`
+	PublishCleanScans  bool          `mapstructure:"publishCleanScans"`
+	DeduplicateTTL     time.Duration `mapstructure:"dedupeTTL"`
 }
 
 // KomodorConfig defines Komodor integration settings.
 type KomodorConfig struct {
-	BaseURL string
+	BaseURL string `mapstructure:"baseURL"`
 }
 
 // EnabledScanners returns a human-readable list of enabled scanners.
@@ -114,6 +123,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("state.ttl must be greater than 0")
 	}
 
+	if err := validateState(c.State); err != nil {
+		return err
+	}
+
 	if err := validatePublishing(c.Publishing); err != nil {
 		return err
 	}
@@ -129,6 +142,15 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+func validateState(state StateConfig) error {
+	switch NormalizeStateBackend(state.Backend) {
+	case StateBackendConfigMap, StateBackendMemory, StateBackendExternal:
+		return nil
+	default:
+		return fmt.Errorf("state.backend must be one of: %s, %s, %s", StateBackendConfigMap, StateBackendMemory, StateBackendExternal)
+	}
 }
 
 func validatePublishing(publishing PublishingConfig) error {
@@ -221,4 +243,13 @@ func validateKomodor(komodor KomodorConfig) error {
 	}
 
 	return nil
+}
+
+// NormalizeStateBackend returns a validated backend value with defaults applied.
+func NormalizeStateBackend(backend string) string {
+	if strings.TrimSpace(backend) == "" {
+		return StateBackendConfigMap
+	}
+
+	return strings.ToLower(strings.TrimSpace(backend))
 }

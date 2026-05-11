@@ -1,163 +1,94 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
-	"os"
-	"path/filepath"
+	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"github.com/go-viper/mapstructure/v2"
+	"github.com/spf13/viper"
 )
-
-// rawConfig is the YAML structure for configuration.
-type rawConfig struct {
-	ClusterName string `yaml:"clusterName"`
-	Namespaces  struct {
-		Include []string `yaml:"include"`
-		Exclude []string `yaml:"exclude"`
-	} `yaml:"namespaces"`
-	Workloads struct {
-		Kinds []string `yaml:"kinds"`
-	} `yaml:"workloads"`
-	Registry struct {
-		ResolveDigest bool `yaml:"resolveDigest"`
-	} `yaml:"registry"`
-	State struct {
-		TTL string `yaml:"ttl"`
-	} `yaml:"state"`
-	Scanners struct {
-		Concurrency int `yaml:"concurrency"`
-		Scanners    []struct {
-			Name      string   `yaml:"name"`
-			Type      string   `yaml:"type"`
-			Enabled   bool     `yaml:"enabled"`
-			Resources []string `yaml:"resources"`
-			Command   struct {
-				Binary  string `yaml:"binary"`
-				Timeout string `yaml:"timeout"`
-			} `yaml:"command"`
-		} `yaml:"scanners"`
-	} `yaml:"scanners"`
-	Publishing struct {
-		Mode               string `yaml:"mode"`
-		MinimumSeverity    string `yaml:"minimumSeverity"`
-		IncludeTopFindings int    `yaml:"includeTopFindings"`
-		PublishCleanScans  bool   `yaml:"publishCleanScans"`
-		DeduplicateTTL     string `yaml:"dedupeTTL"`
-	} `yaml:"publishing"`
-	Komodor struct {
-		BaseURL string `yaml:"baseURL"`
-	} `yaml:"komodor"`
-}
 
 // LoadFromFile loads configuration from a YAML file.
 func LoadFromFile(path string) (*Config, error) {
-	data, err := os.ReadFile(filepath.Clean(path))
-	if err != nil {
+	v := newLoader()
+	v.SetConfigFile(path)
+
+	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
 
-	return LoadFromBytes(data)
+	cfg, err := unmarshalConfig(v)
+	if err != nil {
+		return nil, err
+	}
+
+	return validateLoadedConfig(cfg)
 }
 
 // LoadFromBytes loads configuration from YAML bytes.
 func LoadFromBytes(data []byte) (*Config, error) {
-	var raw rawConfig
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	v := newLoader()
+	v.SetConfigType("yaml")
+
+	if err := v.ReadConfig(bytes.NewReader(data)); err != nil {
 		return nil, fmt.Errorf("unmarshal yaml: %w", err)
 	}
 
-	return convertToConfig(raw)
-}
-
-func convertToConfig(raw rawConfig) (*Config, error) {
-	cfg := &Config{
-		ClusterName: raw.ClusterName,
-		Namespaces: NamespaceConfig{
-			Include: raw.Namespaces.Include,
-			Exclude: raw.Namespaces.Exclude,
-		},
-		Workloads: WorkloadsConfig{
-			Kinds: raw.Workloads.Kinds,
-		},
-		Registry: RegistryConfig{
-			ResolveDigest: raw.Registry.ResolveDigest,
-		},
-		State: StateConfig{},
-		Komodor: KomodorConfig{
-			BaseURL: raw.Komodor.BaseURL,
-		},
+	cfg, err := unmarshalConfig(v)
+	if err != nil {
+		return nil, err
 	}
 
-	stateTTL := 72 * time.Hour // default
+	return validateLoadedConfig(cfg)
+}
 
-	if raw.State.TTL != "" {
-		d, err := time.ParseDuration(raw.State.TTL)
-		if err != nil {
+func newLoader() *viper.Viper {
+	v := viper.New()
+	v.SetDefault("state.backend", StateBackendConfigMap)
+	v.SetDefault("state.ttl", "72h")
+	v.SetDefault("state.namespace", "default")
+	v.SetDefault("scanners.concurrency", 4)
+	v.SetDefault("publishing.mode", PublishingModeKomodor)
+	v.SetDefault("publishing.dedupeTTL", "24h")
+	v.SetDefault("scanners.scanners", []map[string]any{})
+
+	return v
+}
+
+func unmarshalConfig(v *viper.Viper) (*Config, error) {
+	var cfg Config
+
+	err := v.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
+		dc.TagName = "mapstructure"
+		dc.DecodeHook = mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+		)
+	})
+	if err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "state.ttl") {
 			return nil, fmt.Errorf("parse state ttl: %w", err)
 		}
 
-		stateTTL = d
-	}
-
-	cfg.State = StateConfig{TTL: stateTTL}
-
-	if raw.Scanners.Concurrency > 0 {
-		cfg.Scanners.Concurrency = raw.Scanners.Concurrency
-	} else {
-		cfg.Scanners.Concurrency = 4
-	}
-
-	// Parse scanners
-	cfg.Scanners.Scanners = make([]ScannerConfig, len(raw.Scanners.Scanners))
-	for i, s := range raw.Scanners.Scanners {
-		timeout := 5 * time.Minute // default
-
-		if s.Command.Timeout != "" {
-			d, err := time.ParseDuration(s.Command.Timeout)
-			if err != nil {
-				return nil, fmt.Errorf("parse scanner timeout: %w", err)
-			}
-
-			timeout = d
+		if strings.Contains(errMsg, ".command.timeout") {
+			return nil, fmt.Errorf("parse scanner timeout: %w", err)
 		}
 
-		cfg.Scanners.Scanners[i] = ScannerConfig{
-			Name:      s.Name,
-			Type:      s.Type,
-			Enabled:   s.Enabled,
-			Resources: append([]string(nil), s.Resources...),
-			Command: CommandConfig{
-				Binary:  s.Command.Binary,
-				Timeout: timeout,
-			},
+		return nil, fmt.Errorf("decode config: %w", err)
+	}
+
+	for i := range cfg.Scanners.Scanners {
+		if cfg.Scanners.Scanners[i].Command.Timeout == 0 {
+			cfg.Scanners.Scanners[i].Command.Timeout = 5 * time.Minute
 		}
 	}
 
-	// Parse publishing config
-	deduplicateTTL := 24 * time.Hour // default
+	return &cfg, nil
+}
 
-	if raw.Publishing.DeduplicateTTL != "" {
-		d, err := time.ParseDuration(raw.Publishing.DeduplicateTTL)
-		if err != nil {
-			return nil, fmt.Errorf("parse deduplicate TTL: %w", err)
-		}
-
-		deduplicateTTL = d
-	}
-
-	cfg.Publishing = PublishingConfig{
-		Mode:               raw.Publishing.Mode,
-		MinimumSeverity:    raw.Publishing.MinimumSeverity,
-		IncludeTopFindings: raw.Publishing.IncludeTopFindings,
-		PublishCleanScans:  raw.Publishing.PublishCleanScans,
-		DeduplicateTTL:     deduplicateTTL,
-	}
-
-	if cfg.Publishing.Mode == "" {
-		cfg.Publishing.Mode = PublishingModeKomodor
-	}
-
+func validateLoadedConfig(cfg *Config) (*Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate config: %w", err)
 	}

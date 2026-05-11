@@ -22,6 +22,13 @@ registry:
   resolveDigest: true
 
 state:
+  # Backend type: configmap (default), memory, or external.
+  backend: configmap
+
+  # Namespace containing the state ConfigMap.
+  # Default is "default" if omitted.
+  namespace: default
+
   # Expire stored scan state after this duration.
   # Default is 72h if omitted.
   ttl: 72h
