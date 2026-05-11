@@ -4,9 +4,220 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver bump to apply from latest stable tag"
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+      prerelease:
+        description: "Create a prerelease tag (for example v1.2.3-rc.1)"
+        required: true
+        type: boolean
+        default: false
+      prerelease_suffix:
+        description: "Prerelease suffix when prerelease=true (for example rc, beta, alpha)"
+        required: true
+        type: string
+        default: rc
 
 jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: Verify actor is allowed by CODEOWNERS
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const coreOwnersPath = '.github/CODEOWNERS';
+
+            if (!fs.existsSync(coreOwnersPath)) {
+              core.setFailed('CODEOWNERS file is required for release dispatch gating.');
+              return;
+            }
+
+            const actor = context.actor;
+            const content = fs.readFileSync(coreOwnersPath, 'utf8');
+            const lines = content
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter((line) => line && !line.startsWith('#'));
+
+            const wildcardOwners = [];
+            for (const line of lines) {
+              const parts = line.split(/\s+/);
+              if (parts.length < 2) {
+                continue;
+              }
+
+              const pattern = parts[0];
+              if (pattern !== '*') {
+                continue;
+              }
+
+              for (const owner of parts.slice(1)) {
+                if (owner.startsWith('@')) {
+                  wildcardOwners.push(owner);
+                }
+              }
+            }
+
+            if (wildcardOwners.length === 0) {
+              core.setFailed('No wildcard (*) owners found in CODEOWNERS. Add at least one repository owner to gate releases.');
+              return;
+            }
+
+            const actorOwner = `@${actor}`;
+            if (wildcardOwners.includes(actorOwner)) {
+              core.info(`Actor ${actorOwner} is directly allowed by CODEOWNERS wildcard ownership.`);
+              return;
+            }
+
+            const teamOwners = wildcardOwners.filter((owner) => owner.includes('/'));
+            for (const owner of teamOwners) {
+              const teamRef = owner.slice(1);
+              const [org, teamSlug] = teamRef.split('/');
+
+              if (!org || !teamSlug) {
+                continue;
+              }
+
+              try {
+                await github.request('GET /orgs/{org}/teams/{team_slug}/memberships/{username}', {
+                  org,
+                  team_slug: teamSlug,
+                  username: actor,
+                });
+
+                core.info(`Actor @${actor} is a member of CODEOWNERS team ${owner}.`);
+                return;
+              } catch (err) {
+                const status = err.status || 0;
+                if (status !== 404) {
+                  core.warning(`Unable to validate membership for ${owner}: ${err.message}`);
+                }
+              }
+            }
+
+            core.setFailed(`Actor @${actor} is not allowed to dispatch releases by CODEOWNERS wildcard owners: ${wildcardOwners.join(', ')}`);
+
+      - name: Calculate next release tag
+        id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          BUMP: ${{ inputs.bump }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          PRERELEASE_SUFFIX: ${{ inputs.prerelease_suffix }}
+        run: |
+          set -euo pipefail
+
+          git fetch --tags --force
+
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            echo "tag=${REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "Using pushed tag: ${REF_NAME}"
+            exit 0
+          fi
+
+          go install github.com/caarlos0/svu/v3@latest
+          svu_cmd="$(go env GOPATH)/bin/svu"
+
+          case "$BUMP" in
+            major)
+              base_tag="$($svu_cmd major --tag.pattern '^v[0-9]+\.[0-9]+\.[0-9]+$')"
+              ;;
+            minor)
+              base_tag="$($svu_cmd minor --tag.pattern '^v[0-9]+\.[0-9]+\.[0-9]+$')"
+              ;;
+            patch)
+              base_tag="$($svu_cmd patch --tag.pattern '^v[0-9]+\.[0-9]+\.[0-9]+$')"
+              ;;
+            *)
+              echo "Unsupported bump: $BUMP" >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ -z "$base_tag" ]]; then
+            echo "Unable to calculate next base tag with svu" >&2
+            exit 1
+          fi
+
+          base="${base_tag#v}"
+
+          if [[ "$PRERELEASE" == "true" ]]; then
+            suffix="${PRERELEASE_SUFFIX:-rc}"
+            pattern="v${base}-${suffix}."
+            current_index=$(git tag -l "${pattern}*" \
+              | sed -E "s/^v${base}-${suffix}\.([0-9]+)$/\1/" \
+              | grep -E '^[0-9]+$' \
+              | sort -n \
+              | tail -n 1 || true)
+
+            if [[ -z "$current_index" ]]; then
+              next_index=1
+            else
+              next_index=$((current_index + 1))
+            fi
+
+            tag="v${base}-${suffix}.${next_index}"
+          else
+            tag="v${base}"
+          fi
+
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists." >&2
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Computed tag: ${tag}"
+
+      - name: Create and push release tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Dispatch summary
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          echo "Created release tag: ${TAG}"
+          echo "Release job will run in this workflow for ${TAG}."
+
   release:
+    needs: prepare-release
+    if: needs.prepare-release.outputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write # required for creating releases and uploading release assets
@@ -17,6 +228,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: refs/tags/${{ needs.prepare-release.outputs.tag }}
 
       - uses: actions/setup-go@v6
         with:
