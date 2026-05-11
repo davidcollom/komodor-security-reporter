@@ -84,8 +84,39 @@ komodor:
 	require.Equal(t, 72*time.Hour, cfg.State.TTL)
 	require.Equal(t, StateBackendConfigMap, NormalizeStateBackend(cfg.State.Backend))
 	require.Equal(t, "default", cfg.State.Namespace)
+	require.Equal(t, DefaultScannerRuntimeTimeout, cfg.Scanners.Runtime.Timeout)
+	require.Equal(t, DefaultScannerRetryMaxAttempts, cfg.Scanners.Runtime.Retry.MaxAttempts)
+	require.Equal(t, DefaultScannerRetryInitialBackoff, cfg.Scanners.Runtime.Retry.InitialBackoff)
+	require.Equal(t, DefaultScannerRetryMaxBackoff, cfg.Scanners.Runtime.Retry.MaxBackoff)
+	require.Equal(t, DefaultScannerRetryBackoffMultiplier, cfg.Scanners.Runtime.Retry.BackoffMultiplier)
+	require.Equal(t, DefaultScannerCircuitFailureThreshold, cfg.Scanners.Runtime.CircuitBreaker.FailureThreshold)
+	require.Equal(t, DefaultScannerCircuitOpenDuration, cfg.Scanners.Runtime.CircuitBreaker.OpenDuration)
+	require.Equal(t, DefaultScannerCircuitHalfOpenMaxRequests, cfg.Scanners.Runtime.CircuitBreaker.HalfOpenMaxRequests)
 	// Should default to 5 minutes
 	require.Equal(t, 5*time.Minute, cfg.Scanners.Scanners[0].Command.Timeout)
+}
+
+func TestLoadFromBytesInvalidScannerRuntime(t *testing.T) {
+	yaml := []byte(`
+clusterName: test
+workloads:
+  kinds:
+    - Deployment
+scanners:
+  runtime:
+    timeout: invalid
+  scanners:
+    - name: trivy
+      type: trivy
+      enabled: true
+komodor:
+  baseURL: https://app.komodor.io
+`)
+
+	_, err := LoadFromBytes(yaml)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "parse scanner runtime config")
 }
 
 func TestLoadFromBytesParsesStateBackend(t *testing.T) {

@@ -33,6 +33,34 @@ state:
   # Default is 72h if omitted.
   ttl: 72h
 
+  # memory backend settings (only used when backend: memory).
+  # State is in-process only and will be lost on pod restart.
+  memory:
+    # Maximum number of live entries. 0 means unlimited.
+    # Default: 1000
+    maxEntries: 1000
+
+  # external backend settings (only used when backend: external).
+  # Requires a Redis-compatible server. No Kubernetes write permissions needed.
+  # external:
+  #   # Redis address in host:port form (required).
+  #   address: redis:6379
+  #
+  #   # Optional Redis credentials.
+  #   password: ""
+  #   db: 0
+  #
+  #   # Enable TLS (e.g. for Redis with TLS termination or managed Redis services).
+  #   tlsEnabled: false
+  #
+  #   # Key prefix applied to all Redis keys. Defaults to "komodor-security-reporter".
+  #   keyPrefix: komodor-security-reporter
+  #
+  #   # Network timeouts.
+  #   dialTimeout: 5s
+  #   readTimeout: 3s
+  #   writeTimeout: 3s
+
 scanners:
   concurrency: 4
   scanners:

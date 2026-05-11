@@ -24,15 +24,19 @@ import (
 
 // Reconciler orchestrates vulnerability scanning and event publishing.
 type Reconciler struct {
-	clientset       kubernetes.Interface
-	cfg             *config.Config
-	imageExtractor  *controller.ImageExtractor
-	resolver        *registry.Resolver
-	scannerRegistry map[string]scanners.Scanner
-	publisher       *komodor.Publisher
-	stateStore      state.Backend
-	log             logrus.FieldLogger
-	metrics         *metrics.Metrics
+	clientset            kubernetes.Interface
+	cfg                  *config.Config
+	imageExtractor       *controller.ImageExtractor
+	resolver             *registry.Resolver
+	scannerRegistry      map[string]scanners.Scanner
+	scannerConfigsByName map[string]config.ScannerConfig
+	publisher            *komodor.Publisher
+	stateStore           state.Backend
+	log                  logrus.FieldLogger
+	metrics              *metrics.Metrics
+	runtimePolicy        scannerRuntimePolicy
+	circuitBreaker       *scannerCircuitBreaker
+	sleep                func(context.Context, time.Duration) error
 }
 
 // NewReconciler creates a new reconciler instance.
@@ -47,16 +51,28 @@ func NewReconciler(
 	log logrus.FieldLogger,
 	metrics *metrics.Metrics,
 ) *Reconciler {
+	runtimePolicy := newScannerRuntimePolicy(cfg.Scanners.Runtime)
+
+	scannerConfigsByName := make(map[string]config.ScannerConfig, len(cfg.Scanners.Scanners))
+	for i := range cfg.Scanners.Scanners {
+		scannerCfg := cfg.Scanners.Scanners[i]
+		scannerConfigsByName[scannerCfg.Name] = scannerCfg
+	}
+
 	return &Reconciler{
-		clientset:       clientset,
-		cfg:             cfg,
-		imageExtractor:  imageExtractor,
-		resolver:        resolver,
-		scannerRegistry: scannerRegistry,
-		publisher:       publisher,
-		stateStore:      stateStore,
-		log:             log,
-		metrics:         metrics,
+		clientset:            clientset,
+		cfg:                  cfg,
+		imageExtractor:       imageExtractor,
+		resolver:             resolver,
+		scannerRegistry:      scannerRegistry,
+		scannerConfigsByName: scannerConfigsByName,
+		publisher:            publisher,
+		stateStore:           stateStore,
+		log:                  log,
+		metrics:              metrics,
+		runtimePolicy:        runtimePolicy,
+		circuitBreaker:       newScannerCircuitBreaker(runtimePolicy, time.Now),
+		sleep:                sleepWithContext,
 	}
 }
 
@@ -273,7 +289,19 @@ func (r *Reconciler) reconcileWorkload(ctx context.Context, namespace string, wl
 		for _, scanner := range r.scannerRegistry {
 			scanWaitGroup.Add(1)
 
+			if r.metrics != nil && r.metrics.ScanQueueDepth != nil {
+				r.metrics.ScanQueueDepth.Inc()
+			}
+
 			semaphore <- struct{}{}
+
+			if r.metrics != nil && r.metrics.ScanQueueDepth != nil {
+				r.metrics.ScanQueueDepth.Dec()
+			}
+
+			if r.metrics != nil && r.metrics.ScansInFlight != nil {
+				r.metrics.ScansInFlight.Inc()
+			}
 
 			go r.runScannerForImage(
 				ctx,
@@ -349,17 +377,30 @@ func (r *Reconciler) runScannerForImage(
 ) {
 	defer scanWaitGroup.Done()
 	defer func() { <-semaphore }()
+	defer func() {
+		if r.metrics != nil && r.metrics.ScansInFlight != nil {
+			r.metrics.ScansInFlight.Dec()
+		}
+	}()
 
 	scannerLog := imgLog.WithField("scanner", scanner.Name())
 	scannerLog.Debug("starting vulnerability scan")
 
-	scanStart := time.Now()
-	scanResult, err := scanner.Scan(ctx, scanImageRef)
-	scanDuration := time.Since(scanStart).Seconds()
-
+	scanResult, scanDuration, errClass, err := r.executeScannerWithResilience(ctx, scanner, scanImageRef)
 	if err != nil {
-		scannerLog.WithError(err).Warn("scan failed")
+		scannerLog.WithFields(logrus.Fields{
+			"error_class": errClass,
+		}).WithError(err).Warn("scan failed")
 		r.metrics.ScanErrorsTotal.Inc()
+
+		if r.metrics.ScannerErrorClassTotal != nil {
+			r.metrics.ScannerErrorClassTotal.WithLabelValues(scanner.Name(), string(errClass)).Inc()
+		}
+
+		if errClass == scannerErrorClassCircuitOpen && r.metrics.ScannerSkippedTotal != nil {
+			r.metrics.ScannerSkippedTotal.WithLabelValues(scanner.Name(), "circuit_open").Inc()
+		}
+
 		execState.setError(err)
 
 		return

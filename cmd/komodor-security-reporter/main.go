@@ -258,13 +258,7 @@ func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logr
 }
 
 func buildStateStore(cfg *config.Config, clientset kubernetes.Interface, namespace string) (state.Backend, error) {
-	return statebackends.New(
-		config.NormalizeStateBackend(cfg.State.Backend),
-		clientset,
-		namespace,
-		"komodor-security-reporter-state",
-		cfg.State.TTL,
-	)
+	return statebackends.New(cfg.State, namespace, clientset)
 }
 
 func stateStoreNamespace(configNamespace string) string {

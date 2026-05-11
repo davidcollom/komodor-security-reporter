@@ -148,6 +148,56 @@ func TestValidateConfig(t *testing.T) {
 			wantError: true,
 		},
 		{
+			name: "invalid scanner runtime retry attempts",
+			config: &Config{
+				ClusterName: "test",
+				Workloads: WorkloadsConfig{
+					Kinds: []string{"Deployment"},
+				},
+				Scanners: ScannersConfig{
+					Concurrency: 1,
+					Runtime: ScannerRuntimeConfig{
+						Retry: ScannerRetryConfig{MaxAttempts: -1},
+					},
+					Scanners: []ScannerConfig{{
+						Name:    "trivy",
+						Type:    "trivy",
+						Enabled: true,
+					}},
+				},
+				State: StateConfig{TTL: 72 * time.Hour},
+				Komodor: KomodorConfig{
+					BaseURL: "https://app.komodor.io",
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid scanner runtime circuit breaker threshold",
+			config: &Config{
+				ClusterName: "test",
+				Workloads: WorkloadsConfig{
+					Kinds: []string{"Deployment"},
+				},
+				Scanners: ScannersConfig{
+					Concurrency: 1,
+					Runtime: ScannerRuntimeConfig{
+						CircuitBreaker: ScannerCircuitConfig{FailureThreshold: -1},
+					},
+					Scanners: []ScannerConfig{{
+						Name:    "trivy",
+						Type:    "trivy",
+						Enabled: true,
+					}},
+				},
+				State: StateConfig{TTL: 72 * time.Hour},
+				Komodor: KomodorConfig{
+					BaseURL: "https://app.komodor.io",
+				},
+			},
+			wantError: true,
+		},
+		{
 			name: "komodor base url required in komodor mode",
 			config: &Config{
 				ClusterName: "test",

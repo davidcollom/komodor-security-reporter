@@ -3,11 +3,16 @@ module github.com/davidcollom/komodor-security-reporter
 go 1.26.3
 
 require (
+	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/bombsimon/logrusr/v3 v3.1.0
+	github.com/bradfitz/gomemcache v0.0.0-20260422231931-4d751bb6e37c
 	github.com/eko/gocache/lib/v4 v4.2.3
+	github.com/eko/gocache/store/go_cache/v4 v4.2.3
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/google/go-containerregistry v0.21.5
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.23.2
+	github.com/redis/go-redis/v9 v9.19.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.20.1
@@ -68,6 +73,8 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/vbatts/tar-split v0.12.3 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect

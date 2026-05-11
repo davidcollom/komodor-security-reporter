@@ -6,11 +6,31 @@ import (
 	"time"
 )
 
+const (
+	// DefaultScannerRuntimeTimeout is the per-scan timeout when a scanner does not define a command timeout.
+	DefaultScannerRuntimeTimeout = 5 * time.Minute
+	// DefaultScannerRetryMaxAttempts is the maximum number of scan attempts (first attempt + retries).
+	DefaultScannerRetryMaxAttempts = 3
+	// DefaultScannerRetryInitialBackoff is the initial retry delay for transient scanner failures.
+	DefaultScannerRetryInitialBackoff = 1 * time.Second
+	// DefaultScannerRetryMaxBackoff is the upper bound for retry backoff.
+	DefaultScannerRetryMaxBackoff = 10 * time.Second
+	// DefaultScannerRetryBackoffMultiplier controls exponential backoff growth.
+	DefaultScannerRetryBackoffMultiplier = 2.0
+	// DefaultScannerCircuitFailureThreshold is the number of failed scans before opening the scanner circuit.
+	DefaultScannerCircuitFailureThreshold = 3
+	// DefaultScannerCircuitOpenDuration is how long a scanner circuit stays open before half-open checks.
+	DefaultScannerCircuitOpenDuration = 2 * time.Minute
+	// DefaultScannerCircuitHalfOpenMaxRequests is the number of probe requests allowed while half-open.
+	DefaultScannerCircuitHalfOpenMaxRequests = 1
+)
+
 // Supported state backend names.
 const (
 	StateBackendConfigMap = "configmap"
 	StateBackendMemory    = "memory"
-	StateBackendExternal  = "external"
+	StateBackendRedis     = "redis"
+	StateBackendMemcache  = "memcache"
 )
 
 // Publishing mode constants control where scan findings are sent.
@@ -50,15 +70,70 @@ type RegistryConfig struct {
 
 // StateConfig defines state storage behaviour.
 type StateConfig struct {
-	Backend   string        `mapstructure:"backend"`
-	TTL       time.Duration `mapstructure:"ttl"`
-	Namespace string        `mapstructure:"namespace"`
+	Backend   string         `mapstructure:"backend"`
+	TTL       time.Duration  `mapstructure:"ttl"`
+	Namespace string         `mapstructure:"namespace"`
+	Memory    MemoryConfig   `mapstructure:"memory"`
+	Redis     RedisConfig    `mapstructure:"redis"`
+	Memcache  MemcacheConfig `mapstructure:"memcache"`
+}
+
+// MemoryConfig defines in-process memory backend settings.
+type MemoryConfig struct {
+	// MaxEntries caps the number of live dedupe entries. 0 means unlimited.
+	MaxEntries int `mapstructure:"maxEntries"`
+}
+
+// RedisConfig defines Redis-backed state backend settings.
+type RedisConfig struct {
+	// Address is the Redis server address in host:port form (required for redis backend).
+	Address    string `mapstructure:"address"`
+	Password   string `mapstructure:"password"`
+	DB         int    `mapstructure:"db"`
+	TLSEnabled bool   `mapstructure:"tlsEnabled"`
+	// KeyPrefix is prepended to all Redis keys. Defaults to "komodor-security-reporter".
+	KeyPrefix    string        `mapstructure:"keyPrefix"`
+	DialTimeout  time.Duration `mapstructure:"dialTimeout"`
+	ReadTimeout  time.Duration `mapstructure:"readTimeout"`
+	WriteTimeout time.Duration `mapstructure:"writeTimeout"`
+}
+
+// MemcacheConfig defines Memcache-backed state backend settings.
+type MemcacheConfig struct {
+	// Address is the Memcache server address in host:port form (required for memcache backend).
+	Address      string        `mapstructure:"address"`
+	KeyPrefix    string        `mapstructure:"keyPrefix"`
+	Timeout      time.Duration `mapstructure:"timeout"`
+	MaxIdleConns int           `mapstructure:"maxIdleConns"`
 }
 
 // ScannersConfig defines scanner configurations.
 type ScannersConfig struct {
-	Concurrency int             `mapstructure:"concurrency"`
-	Scanners    []ScannerConfig `mapstructure:"scanners"`
+	Concurrency int                  `mapstructure:"concurrency"`
+	Runtime     ScannerRuntimeConfig `mapstructure:"runtime"`
+	Scanners    []ScannerConfig      `mapstructure:"scanners"`
+}
+
+// ScannerRuntimeConfig defines scanner execution resilience behaviour.
+type ScannerRuntimeConfig struct {
+	Timeout        time.Duration        `mapstructure:"timeout"`
+	Retry          ScannerRetryConfig   `mapstructure:"retry"`
+	CircuitBreaker ScannerCircuitConfig `mapstructure:"circuitBreaker"`
+}
+
+// ScannerRetryConfig defines retry behaviour for transient scanner failures.
+type ScannerRetryConfig struct {
+	MaxAttempts       int           `mapstructure:"maxAttempts"`
+	InitialBackoff    time.Duration `mapstructure:"initialBackoff"`
+	MaxBackoff        time.Duration `mapstructure:"maxBackoff"`
+	BackoffMultiplier float64       `mapstructure:"backoffMultiplier"`
+}
+
+// ScannerCircuitConfig defines circuit breaker behaviour for scanner failures.
+type ScannerCircuitConfig struct {
+	FailureThreshold    int           `mapstructure:"failureThreshold"`
+	OpenDuration        time.Duration `mapstructure:"openDuration"`
+	HalfOpenMaxRequests int           `mapstructure:"halfOpenMaxRequests"`
 }
 
 // ScannerConfig defines a single scanner configuration.
@@ -146,10 +221,22 @@ func (c *Config) Validate() error {
 
 func validateState(state StateConfig) error {
 	switch NormalizeStateBackend(state.Backend) {
-	case StateBackendConfigMap, StateBackendMemory, StateBackendExternal:
+	case StateBackendConfigMap, StateBackendMemory:
+		return nil
+	case StateBackendRedis:
+		if strings.TrimSpace(state.Redis.Address) == "" {
+			return fmt.Errorf("state.redis.address is required when using the redis backend")
+		}
+
+		return nil
+	case StateBackendMemcache:
+		if strings.TrimSpace(state.Memcache.Address) == "" {
+			return fmt.Errorf("state.memcache.address is required when using the memcache backend")
+		}
+
 		return nil
 	default:
-		return fmt.Errorf("state.backend must be one of: %s, %s, %s", StateBackendConfigMap, StateBackendMemory, StateBackendExternal)
+		return fmt.Errorf("state.backend must be one of: %s, %s, %s, %s", StateBackendConfigMap, StateBackendMemory, StateBackendRedis, StateBackendMemcache)
 	}
 }
 
@@ -216,6 +303,40 @@ func validateScanners(scanners ScannersConfig) error {
 		return fmt.Errorf("scanner concurrency must be greater than 0")
 	}
 
+	runtime := EffectiveScannerRuntimeConfig(scanners.Runtime)
+
+	if runtime.Timeout <= 0 {
+		return fmt.Errorf("scanners.runtime.timeout must be greater than 0")
+	}
+
+	if runtime.Retry.MaxAttempts <= 0 {
+		return fmt.Errorf("scanners.runtime.retry.maxAttempts must be greater than 0")
+	}
+
+	if runtime.Retry.InitialBackoff <= 0 {
+		return fmt.Errorf("scanners.runtime.retry.initialBackoff must be greater than 0")
+	}
+
+	if runtime.Retry.MaxBackoff <= 0 {
+		return fmt.Errorf("scanners.runtime.retry.maxBackoff must be greater than 0")
+	}
+
+	if runtime.Retry.BackoffMultiplier < 1 {
+		return fmt.Errorf("scanners.runtime.retry.backoffMultiplier must be greater than or equal to 1")
+	}
+
+	if runtime.CircuitBreaker.FailureThreshold <= 0 {
+		return fmt.Errorf("scanners.runtime.circuitBreaker.failureThreshold must be greater than 0")
+	}
+
+	if runtime.CircuitBreaker.OpenDuration <= 0 {
+		return fmt.Errorf("scanners.runtime.circuitBreaker.openDuration must be greater than 0")
+	}
+
+	if runtime.CircuitBreaker.HalfOpenMaxRequests <= 0 {
+		return fmt.Errorf("scanners.runtime.circuitBreaker.halfOpenMaxRequests must be greater than 0")
+	}
+
 	for _, s := range scanners.Scanners {
 		if s.Name == "" {
 			return fmt.Errorf("scanner name is required")
@@ -237,6 +358,43 @@ func validateScanners(scanners ScannersConfig) error {
 	return nil
 }
 
+// EffectiveScannerRuntimeConfig applies defaults to scanner runtime settings.
+func EffectiveScannerRuntimeConfig(runtime ScannerRuntimeConfig) ScannerRuntimeConfig {
+	if runtime.Timeout == 0 {
+		runtime.Timeout = DefaultScannerRuntimeTimeout
+	}
+
+	if runtime.Retry.MaxAttempts == 0 {
+		runtime.Retry.MaxAttempts = DefaultScannerRetryMaxAttempts
+	}
+
+	if runtime.Retry.InitialBackoff == 0 {
+		runtime.Retry.InitialBackoff = DefaultScannerRetryInitialBackoff
+	}
+
+	if runtime.Retry.MaxBackoff == 0 {
+		runtime.Retry.MaxBackoff = DefaultScannerRetryMaxBackoff
+	}
+
+	if runtime.Retry.BackoffMultiplier == 0 {
+		runtime.Retry.BackoffMultiplier = DefaultScannerRetryBackoffMultiplier
+	}
+
+	if runtime.CircuitBreaker.FailureThreshold == 0 {
+		runtime.CircuitBreaker.FailureThreshold = DefaultScannerCircuitFailureThreshold
+	}
+
+	if runtime.CircuitBreaker.OpenDuration == 0 {
+		runtime.CircuitBreaker.OpenDuration = DefaultScannerCircuitOpenDuration
+	}
+
+	if runtime.CircuitBreaker.HalfOpenMaxRequests == 0 {
+		runtime.CircuitBreaker.HalfOpenMaxRequests = DefaultScannerCircuitHalfOpenMaxRequests
+	}
+
+	return runtime
+}
+
 func validateKomodor(komodor KomodorConfig) error {
 	if komodor.BaseURL == "" {
 		return fmt.Errorf("komodor.baseURL is required")
@@ -251,5 +409,10 @@ func NormalizeStateBackend(backend string) string {
 		return StateBackendConfigMap
 	}
 
-	return strings.ToLower(strings.TrimSpace(backend))
+	normalized := strings.ToLower(strings.TrimSpace(backend))
+	if normalized == "external" {
+		return StateBackendRedis
+	}
+
+	return normalized
 }
