@@ -14,6 +14,11 @@ type Metrics struct {
 	ScansTotal                 prometheus.Counter
 	ScanErrorsTotal            prometheus.Counter
 	ScanDurationSeconds        prometheus.Histogram
+	ScansInFlight              prometheus.Gauge
+	ScanQueueDepth             prometheus.Gauge
+	ScannerErrorClassTotal     *prometheus.CounterVec
+	ScannerCircuitState        *prometheus.GaugeVec
+	ScannerSkippedTotal        *prometheus.CounterVec
 	EventsPublishedTotal       prometheus.Counter
 	EventPublishErrorsTotal    prometheus.Counter
 	DedupeHitsTotal            prometheus.Counter
@@ -57,6 +62,26 @@ func NewMetrics() *Metrics {
 			Help:    "Scan duration in seconds",
 			Buckets: prometheus.DefBuckets,
 		}),
+		ScansInFlight: registry.NewGauge(prometheus.GaugeOpts{
+			Name: "image_vuln_watcher_scans_in_flight",
+			Help: "Current number of scans running",
+		}),
+		ScanQueueDepth: registry.NewGauge(prometheus.GaugeOpts{
+			Name: "image_vuln_watcher_scan_queue_depth",
+			Help: "Current number of scans waiting for concurrency slots",
+		}),
+		ScannerErrorClassTotal: registry.NewCounterVec(prometheus.CounterOpts{
+			Name: "image_vuln_watcher_scanner_error_class_total",
+			Help: "Total number of scanner errors by scanner and class",
+		}, []string{"scanner", "class"}),
+		ScannerCircuitState: registry.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "image_vuln_watcher_scanner_circuit_state",
+			Help: "Scanner circuit state as numeric gauge (0=closed,1=open,2=half_open)",
+		}, []string{"scanner"}),
+		ScannerSkippedTotal: registry.NewCounterVec(prometheus.CounterOpts{
+			Name: "image_vuln_watcher_scanner_skipped_total",
+			Help: "Total number of scans skipped by scanner and reason",
+		}, []string{"scanner", "reason"}),
 		EventsPublishedTotal: registry.NewCounter(prometheus.CounterOpts{
 			Name: "image_vuln_watcher_events_published_total",
 			Help: "Total number of events published to Komodor",

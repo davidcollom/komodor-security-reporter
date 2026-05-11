@@ -127,16 +127,15 @@ func TestBuildStateStoreMemoryBackend(t *testing.T) {
 
 	store, err := buildStateStore(cfg, clientset, "default")
 
-	require.Error(t, err)
-	require.Nil(t, store)
-	require.Contains(t, err.Error(), "use gocache's native memory store")
+	require.NoError(t, err)
+	require.NotNil(t, store)
 }
 
-func TestBuildStateStoreExternalBackendNotImplemented(t *testing.T) {
+func TestBuildStateStoreRedisBackendRequiresAddress(t *testing.T) {
 	clientset := fake.NewSimpleClientset()
 	cfg := &config.Config{
 		State: config.StateConfig{
-			Backend: config.StateBackendExternal,
+			Backend: config.StateBackendRedis,
 			TTL:     72 * time.Hour,
 		},
 	}
@@ -144,5 +143,20 @@ func TestBuildStateStoreExternalBackendNotImplemented(t *testing.T) {
 	_, err := buildStateStore(cfg, clientset, "default")
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "not implemented")
+	require.Contains(t, err.Error(), "state.redis.address is required")
+}
+
+func TestBuildStateStoreMemcacheBackendRequiresAddress(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	cfg := &config.Config{
+		State: config.StateConfig{
+			Backend: config.StateBackendMemcache,
+			TTL:     72 * time.Hour,
+		},
+	}
+
+	_, err := buildStateStore(cfg, clientset, "default")
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "state.memcache.address is required")
 }

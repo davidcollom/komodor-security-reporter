@@ -3,10 +3,7 @@ package configmap
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/davidcollom/komodor-security-reporter/internal/state"
@@ -16,6 +13,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 )
 
 // Store implements gocachestore.StoreInterface for ConfigMap-backed persistence.
@@ -60,7 +58,9 @@ func (s *Store) Get(ctx context.Context, key interface{}) (interface{}, error) {
 		return nil, &gocachestore.NotFound{}
 	}
 
-	entry, err := parseStateEntry(data)
+	entry := &state.Entry{}
+
+	err = entry.Unmarshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("parse state entry for key %s: %w", keyStr, err)
 	}
@@ -85,6 +85,8 @@ func (s *Store) GetWithTTL(ctx context.Context, key interface{}) (interface{}, t
 }
 
 // Set stores a state entry in ConfigMap.
+// Note: the options parameter (including per-entry expiration) is not supported by
+// the ConfigMap backend; the TTL configured at construction is always used for expiry.
 func (s *Store) Set(ctx context.Context, key interface{}, object interface{}, options ...gocachestore.Option) error {
 	keyStr, ok := key.(string)
 	if !ok {
@@ -98,38 +100,45 @@ func (s *Store) Set(ctx context.Context, key interface{}, object interface{}, op
 
 	storageKey := configMapDataKey(keyStr)
 
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, s.configMap, metav1.GetOptions{})
+	value, err := entry.Marshal()
 	if err != nil {
-		if apierrors.IsNotFound(err) {
+		return fmt.Errorf("serialise state entry: %w", err)
+	}
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, s.configMap, metav1.GetOptions{})
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				return fmt.Errorf("get configmap: %w", err)
+			}
+			// ConfigMap does not exist yet — create it with the entry already set so
+			// we do not need a subsequent Update (which would fail without resourceVersion).
 			cm = &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      s.configMap,
 					Namespace: s.namespace,
 				},
-				Data: make(map[string]string),
+				Data: map[string]string{storageKey: value},
 			}
-
-			_, err := s.client.CoreV1().ConfigMaps(s.namespace).Create(ctx, cm, metav1.CreateOptions{})
-			if err != nil {
+			if _, err := s.client.CoreV1().ConfigMaps(s.namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
 				return fmt.Errorf("create configmap: %w", err)
 			}
-		} else {
-			return fmt.Errorf("get configmap: %w", err)
+
+			return nil
 		}
-	}
 
-	if cm.Data == nil {
-		cm.Data = make(map[string]string)
-	}
+		if cm.Data == nil {
+			cm.Data = make(map[string]string)
+		}
 
-	cm.Data[storageKey] = formatStateEntry(entry)
+		cm.Data[storageKey] = value
 
-	_, err = s.client.CoreV1().ConfigMaps(s.namespace).Update(ctx, cm, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("update configmap: %w", err)
-	}
+		if _, err = s.client.CoreV1().ConfigMaps(s.namespace).Update(ctx, cm, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("update configmap: %w", err)
+		}
 
-	return nil
+		return nil
+	})
 }
 
 // Delete removes a state entry from ConfigMap.
@@ -141,30 +150,32 @@ func (s *Store) Delete(ctx context.Context, key interface{}) error {
 
 	storageKey := configMapDataKey(keyStr)
 
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, s.configMap, metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(ctx, s.configMap, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+
+			return fmt.Errorf("get configmap: %w", err)
+		}
+
+		if cm.Data == nil {
 			return nil
 		}
 
-		return fmt.Errorf("get configmap: %w", err)
-	}
+		if _, ok := cm.Data[storageKey]; !ok {
+			return nil
+		}
 
-	if cm.Data == nil {
+		delete(cm.Data, storageKey)
+
+		if _, err := s.client.CoreV1().ConfigMaps(s.namespace).Update(ctx, cm, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("update configmap: %w", err)
+		}
+
 		return nil
-	}
-
-	if _, ok := cm.Data[storageKey]; !ok {
-		return nil
-	}
-
-	delete(cm.Data, storageKey)
-
-	if _, err := s.client.CoreV1().ConfigMaps(s.namespace).Update(ctx, cm, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("update configmap: %w", err)
-	}
-
-	return nil
+	})
 }
 
 // Clear removes all entries from ConfigMap (not safely supported).
@@ -184,82 +195,6 @@ func (s *Store) GetType() string {
 
 func configMapDataKey(key string) string {
 	return "state_" + base64.RawURLEncoding.EncodeToString([]byte(key))
-}
-
-type serializedStateEntry struct {
-	Fingerprint       string `json:"fingerprint"`
-	LastScannedTime   int64  `json:"lastScannedTime"`
-	LastPublishedTime int64  `json:"lastPublishedTime"`
-	Summary           string `json:"summary"`
-}
-
-func parseStateEntry(data string) (*state.Entry, error) {
-	var serialized serializedStateEntry
-	if err := json.Unmarshal([]byte(data), &serialized); err == nil {
-		entry := &state.Entry{Fingerprint: serialized.Fingerprint, Summary: serialized.Summary}
-		if serialized.LastScannedTime > 0 {
-			entry.LastScannedTime = time.Unix(serialized.LastScannedTime, 0).UTC()
-		}
-
-		if serialized.LastPublishedTime > 0 {
-			entry.LastPublishedTime = time.Unix(serialized.LastPublishedTime, 0).UTC()
-		}
-
-		return entry, nil
-	}
-
-	parts := strings.SplitN(data, "|", 4)
-	if len(parts) == 4 {
-		entry := &state.Entry{Fingerprint: parts[0], Summary: parts[3]}
-
-		scanned, err := strconv.ParseInt(parts[1], 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("parse scanned unix timestamp: %w", err)
-		}
-
-		published, err := strconv.ParseInt(parts[2], 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("parse published unix timestamp: %w", err)
-		}
-
-		if scanned > 0 {
-			entry.LastScannedTime = time.Unix(scanned, 0).UTC()
-		}
-
-		if published > 0 {
-			entry.LastPublishedTime = time.Unix(published, 0).UTC()
-		}
-
-		return entry, nil
-	}
-
-	return &state.Entry{Fingerprint: data}, nil
-}
-
-func formatStateEntry(entry *state.Entry) string {
-	payload := serializedStateEntry{
-		Fingerprint: entry.Fingerprint,
-		Summary:     entry.Summary,
-	}
-	if !entry.LastScannedTime.IsZero() {
-		payload.LastScannedTime = entry.LastScannedTime.Unix()
-	}
-
-	if !entry.LastPublishedTime.IsZero() {
-		payload.LastPublishedTime = entry.LastPublishedTime.Unix()
-	}
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Sprintf("%s|%d|%d|%s",
-			entry.Fingerprint,
-			entry.LastScannedTime.Unix(),
-			entry.LastPublishedTime.Unix(),
-			entry.Summary,
-		)
-	}
-
-	return string(data)
 }
 
 func (s *Store) isExpired(entry *state.Entry, now time.Time) bool {
@@ -297,7 +232,7 @@ func NewBackend(client kubernetes.Interface, namespace, configMapName string, tt
 func (b *Backend) GetEntry(ctx context.Context, key string) (*state.Entry, error) {
 	entry, err := b.cache.Get(ctx, key)
 	if err != nil {
-		if isCacheNotFound(err) {
+		if state.IsCacheNotFound(err) {
 			return nil, nil
 		}
 
@@ -328,14 +263,4 @@ func (b *Backend) SetEntry(ctx context.Context, key string, entry *state.Entry) 
 // DeleteEntry removes an entry from the cache.
 func (b *Backend) DeleteEntry(ctx context.Context, key string) error {
 	return b.cache.Delete(ctx, key)
-}
-
-func isCacheNotFound(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	_, ok := err.(*gocachestore.NotFound)
-
-	return ok
 }
