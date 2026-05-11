@@ -30,7 +30,7 @@ type Reconciler struct {
 	resolver        *registry.Resolver
 	scannerRegistry map[string]scanners.Scanner
 	publisher       *komodor.Publisher
-	stateStore      *state.Store
+	stateStore      state.Backend
 	log             logrus.FieldLogger
 	metrics         *metrics.Metrics
 }
@@ -43,7 +43,7 @@ func NewReconciler(
 	resolver *registry.Resolver,
 	scannerRegistry map[string]scanners.Scanner,
 	publisher *komodor.Publisher,
-	stateStore *state.Store,
+	stateStore state.Backend,
 	log logrus.FieldLogger,
 	metrics *metrics.Metrics,
 ) *Reconciler {

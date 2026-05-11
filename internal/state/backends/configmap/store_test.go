@@ -1,4 +1,4 @@
-package state
+package configmap
 
 import (
 	"context"
@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidcollom/komodor-security-reporter/internal/state"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestStoreEncodesUnsafeConfigMapKeys(t *testing.T) {
@@ -17,10 +17,10 @@ func TestStoreEncodesUnsafeConfigMapKeys(t *testing.T) {
 
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	store := NewStore(client, "default", "komodor-security-reporter-state", 100*365*24*time.Hour)
+	store := NewBackend(client, "default", "komodor-security-reporter-state", 100*365*24*time.Hour)
 
 	logicalKey := "sha256:e02287f003226f1aad693766e1eecd50272ce6285481906fc9a715cc4f7a5ba9/trivy"
-	entry := &Entry{
+	entry := &state.Entry{
 		Fingerprint:       "fp-123",
 		LastScannedTime:   time.Unix(1700000000, 0).UTC(),
 		LastPublishedTime: time.Unix(1700000100, 0).UTC(),
@@ -52,10 +52,10 @@ func TestStoreExpiresEntriesByTTL(t *testing.T) {
 
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	store := NewStore(client, "default", "komodor-security-reporter-state", time.Hour)
+	store := NewBackend(client, "default", "komodor-security-reporter-state", time.Hour)
 
 	logicalKey := "sha256:old/trivy"
-	expired := &Entry{
+	expired := &state.Entry{
 		Fingerprint:       "old-fingerprint",
 		LastScannedTime:   time.Now().Add(-2 * time.Hour).UTC(),
 		LastPublishedTime: time.Now().Add(-2 * time.Hour).UTC(),
@@ -80,10 +80,10 @@ func TestStoreDeleteEntry(t *testing.T) {
 
 	ctx := context.Background()
 	client := fake.NewSimpleClientset()
-	store := NewStore(client, "default", "komodor-security-reporter-state", 72*time.Hour)
+	store := NewBackend(client, "default", "komodor-security-reporter-state", 72*time.Hour)
 
 	logicalKey := "sha256:to-delete/trivy"
-	entry := &Entry{
+	entry := &state.Entry{
 		Fingerprint:       "fp-delete",
 		LastScannedTime:   time.Now().UTC(),
 		LastPublishedTime: time.Now().UTC(),

@@ -17,6 +17,8 @@ import (
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners"
 	_ "github.com/davidcollom/komodor-security-reporter/internal/scanners/all"
 	"github.com/davidcollom/komodor-security-reporter/internal/state"
+	statebackends "github.com/davidcollom/komodor-security-reporter/internal/state/backends"
+	appversion "github.com/davidcollom/komodor-security-reporter/internal/version"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
@@ -61,6 +63,7 @@ func newRootCommand() *cobra.Command {
 	cmd.Flags().StringVar(&logFormat, "log-format", "json", "Log format: json or text")
 	cmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig file (for local development; uses in-cluster config in production)")
 	cmd.Flags().StringVar(&publishMode, "publish-mode", "komodor", "Publishing mode: komodor, events, or both")
+	cmd.AddCommand(newVersionCommand())
 
 	return cmd
 }
@@ -73,6 +76,11 @@ func run() error {
 	}
 
 	ctrl.SetLogger(logrusr.New(log))
+	log.WithFields(logrus.Fields{
+		"version": appversion.Version,
+		"commit":  appversion.Commit,
+		"date":    appversion.Date,
+	}).Info("application build info")
 
 	log.Info("Starting Komodor Image Vulnerability Watcher")
 
@@ -101,7 +109,7 @@ func run() error {
 
 	m := metrics.NewMetrics()
 
-	components, err := setupRuntimeComponents(cfg, k8sConfig, log)
+	components, err := setupRuntimeComponents(cfg, k8sConfig, log, m)
 	if err != nil {
 		return err
 	}
@@ -193,10 +201,10 @@ type runtimeComponents struct {
 	scannerRegistry map[string]scanners.Scanner
 	publisher       *komodor.Publisher
 	clientset       kubernetes.Interface
-	stateStore      *state.Store
+	stateStore      state.Backend
 }
 
-func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logrus.FieldLogger) (*runtimeComponents, error) {
+func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logrus.FieldLogger, m *metrics.Metrics) (*runtimeComponents, error) {
 	scannerRegistry, err := scanners.CreateScannerRegistry(cfg.Scanners.Scanners, log)
 	if err != nil {
 		return nil, fmt.Errorf("create scanner registry: %w", err)
@@ -231,8 +239,13 @@ func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logr
 		return nil, fmt.Errorf("create Kubernetes clientset: %w", err)
 	}
 
-	stateNamespace := stateStoreNamespace()
+	stateNamespace := stateStoreNamespace(cfg.State.Namespace)
 	log.WithField("namespace", stateNamespace).Info("state store namespace configured")
+
+	stateStore, err := buildStateStore(cfg, clientset, stateNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("build state store: %w", err)
+	}
 
 	return &runtimeComponents{
 		imageExtractor:  controller.NewImageExtractor(),
@@ -240,17 +253,31 @@ func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logr
 		scannerRegistry: scannerRegistry,
 		publisher:       publisher,
 		clientset:       clientset,
-		stateStore:      state.NewStore(clientset, stateNamespace, "komodor-security-reporter-state", cfg.State.TTL),
+		stateStore:      stateStore,
 	}, nil
 }
 
-func stateStoreNamespace() string {
-	namespace := strings.TrimSpace(os.Getenv("POD_NAMESPACE"))
-	if namespace == "" {
-		return "default"
+func buildStateStore(cfg *config.Config, clientset kubernetes.Interface, namespace string) (state.Backend, error) {
+	return statebackends.New(
+		config.NormalizeStateBackend(cfg.State.Backend),
+		clientset,
+		namespace,
+		"komodor-security-reporter-state",
+		cfg.State.TTL,
+	)
+}
+
+func stateStoreNamespace(configNamespace string) string {
+	envNamespace := strings.TrimSpace(os.Getenv("POD_NAMESPACE"))
+	if envNamespace != "" {
+		return envNamespace
 	}
 
-	return namespace
+	if strings.TrimSpace(configNamespace) != "" {
+		return strings.TrimSpace(configNamespace)
+	}
+
+	return "default"
 }
 
 func setupLogging(level, format string) (logrus.FieldLogger, error) {

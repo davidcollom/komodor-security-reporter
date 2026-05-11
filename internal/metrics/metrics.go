@@ -22,6 +22,9 @@ type Metrics struct {
 	StateLookupsTotal          *prometheus.CounterVec
 	StateUpdatesTotal          *prometheus.CounterVec
 	EventSkipsTotal            *prometheus.CounterVec
+	CacheHitsTotal             *prometheus.CounterVec
+	CacheMissesTotal           *prometheus.CounterVec
+	CacheEvictionsTotal        *prometheus.CounterVec
 }
 
 // NewMetrics creates and registers all metrics.
@@ -86,5 +89,17 @@ func NewMetrics() *Metrics {
 			Name: "image_vuln_watcher_event_skips_total",
 			Help: "Total number of event publication skips by reason",
 		}, []string{"reason"}),
+		CacheHitsTotal: registry.NewCounterVec(prometheus.CounterOpts{
+			Name: "image_vuln_watcher_cache_hits_total",
+			Help: "Total number of gocache hits by backend type",
+		}, []string{"backend"}),
+		CacheMissesTotal: registry.NewCounterVec(prometheus.CounterOpts{
+			Name: "image_vuln_watcher_cache_misses_total",
+			Help: "Total number of gocache misses by backend type",
+		}, []string{"backend"}),
+		CacheEvictionsTotal: registry.NewCounterVec(prometheus.CounterOpts{
+			Name: "image_vuln_watcher_cache_evictions_total",
+			Help: "Total number of gocache evictions by backend type",
+		}, []string{"backend"}),
 	}
 }
