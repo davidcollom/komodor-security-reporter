@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 const (
@@ -42,6 +44,8 @@ const (
 
 // Config represents the watcher configuration.
 type Config struct {
+	source *viper.Viper
+
 	ClusterName string           `mapstructure:"clusterName"`
 	Namespaces  NamespaceConfig  `mapstructure:"namespaces"`
 	Workloads   WorkloadsConfig  `mapstructure:"workloads"`
@@ -73,38 +77,7 @@ type StateConfig struct {
 	Backend   string         `mapstructure:"backend"`
 	TTL       time.Duration  `mapstructure:"ttl"`
 	Namespace string         `mapstructure:"namespace"`
-	Memory    MemoryConfig   `mapstructure:"memory"`
-	Redis     RedisConfig    `mapstructure:"redis"`
-	Memcache  MemcacheConfig `mapstructure:"memcache"`
-}
-
-// MemoryConfig defines in-process memory backend settings.
-type MemoryConfig struct {
-	// MaxEntries caps the number of live dedupe entries. 0 means unlimited.
-	MaxEntries int `mapstructure:"maxEntries"`
-}
-
-// RedisConfig defines Redis-backed state backend settings.
-type RedisConfig struct {
-	// Address is the Redis server address in host:port form (required for redis backend).
-	Address    string `mapstructure:"address"`
-	Password   string `mapstructure:"password"`
-	DB         int    `mapstructure:"db"`
-	TLSEnabled bool   `mapstructure:"tlsEnabled"`
-	// KeyPrefix is prepended to all Redis keys. Defaults to "komodor-security-reporter".
-	KeyPrefix    string        `mapstructure:"keyPrefix"`
-	DialTimeout  time.Duration `mapstructure:"dialTimeout"`
-	ReadTimeout  time.Duration `mapstructure:"readTimeout"`
-	WriteTimeout time.Duration `mapstructure:"writeTimeout"`
-}
-
-// MemcacheConfig defines Memcache-backed state backend settings.
-type MemcacheConfig struct {
-	// Address is the Memcache server address in host:port form (required for memcache backend).
-	Address      string        `mapstructure:"address"`
-	KeyPrefix    string        `mapstructure:"keyPrefix"`
-	Timeout      time.Duration `mapstructure:"timeout"`
-	MaxIdleConns int           `mapstructure:"maxIdleConns"`
+	Settings  map[string]any `mapstructure:",remain"`
 }
 
 // ScannersConfig defines scanner configurations.
@@ -138,17 +111,10 @@ type ScannerCircuitConfig struct {
 
 // ScannerConfig defines a single scanner configuration.
 type ScannerConfig struct {
-	Name      string        `mapstructure:"name"`
-	Type      string        `mapstructure:"type"` // trivy, trivy-operator, clair, snyk, wiz
-	Enabled   bool          `mapstructure:"enabled"`
-	Resources []string      `mapstructure:"resources"`
-	Command   CommandConfig `mapstructure:"command"`
-}
-
-// CommandConfig defines CLI-based scanner configuration.
-type CommandConfig struct {
-	Binary  string        `mapstructure:"binary"`
-	Timeout time.Duration `mapstructure:"timeout"`
+	Name     string         `mapstructure:"name"`
+	Type     string         `mapstructure:"type"` // trivy, trivy-operator, clair, snyk, wiz
+	Enabled  bool           `mapstructure:"enabled"`
+	Settings map[string]any `mapstructure:",remain"`
 }
 
 // PublishingConfig defines event publishing policies.
@@ -178,6 +144,24 @@ func (c *Config) EnabledScanners() []string {
 	}
 
 	return enabled
+}
+
+// SubConfig returns a scoped viper instance for the provided path.
+func (c *Config) SubConfig(path string) *viper.Viper {
+	if c == nil || c.source == nil {
+		return nil
+	}
+
+	return c.source.Sub(path)
+}
+
+// ScannerSubConfig returns a scoped viper instance for scanners.scanners[index].
+func (c *Config) ScannerSubConfig(index int) *viper.Viper {
+	if index < 0 {
+		return nil
+	}
+
+	return c.SubConfig(fmt.Sprintf("scanners.scanners.%d", index))
 }
 
 // Validate validates the configuration.
@@ -221,19 +205,7 @@ func (c *Config) Validate() error {
 
 func validateState(state StateConfig) error {
 	switch NormalizeStateBackend(state.Backend) {
-	case StateBackendConfigMap, StateBackendMemory:
-		return nil
-	case StateBackendRedis:
-		if strings.TrimSpace(state.Redis.Address) == "" {
-			return fmt.Errorf("state.redis.address is required when using the redis backend")
-		}
-
-		return nil
-	case StateBackendMemcache:
-		if strings.TrimSpace(state.Memcache.Address) == "" {
-			return fmt.Errorf("state.memcache.address is required when using the memcache backend")
-		}
-
+	case StateBackendConfigMap, StateBackendMemory, StateBackendRedis, StateBackendMemcache:
 		return nil
 	default:
 		return fmt.Errorf("state.backend must be one of: %s, %s, %s, %s", StateBackendConfigMap, StateBackendMemory, StateBackendRedis, StateBackendMemcache)
@@ -344,14 +316,6 @@ func validateScanners(scanners ScannersConfig) error {
 
 		if s.Type == "" {
 			return fmt.Errorf("scanner type is required")
-		}
-
-		if s.Type == "trivy-operator" {
-			for _, resource := range s.Resources {
-				if resource == "" {
-					return fmt.Errorf("trivy-operator scanner resources entries must be non-empty")
-				}
-			}
 		}
 	}
 

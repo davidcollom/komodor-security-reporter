@@ -56,8 +56,10 @@ komodor:
 	require.True(t, cfg.Registry.ResolveDigest)
 	require.Equal(t, 3, cfg.Scanners.Concurrency)
 	require.Equal(t, 1, len(cfg.Scanners.Scanners))
-	require.Equal(t, "/usr/local/bin/trivy", cfg.Scanners.Scanners[0].Command.Binary)
-	require.Equal(t, 5*time.Minute, cfg.Scanners.Scanners[0].Command.Timeout)
+	require.Equal(t, map[string]any{
+		"binary":  "/usr/local/bin/trivy",
+		"timeout": "5m",
+	}, cfg.Scanners.Scanners[0].Settings["command"])
 	require.Equal(t, 72*time.Hour, cfg.State.TTL)
 	require.Equal(t, StateBackendConfigMap, NormalizeStateBackend(cfg.State.Backend))
 	require.Equal(t, PublishingModeKomodor, cfg.Publishing.Mode)
@@ -84,12 +86,10 @@ func TestValidateConfig(t *testing.T) {
 					Concurrency: 2,
 					Scanners: []ScannerConfig{
 						{
-							Name:    "trivy",
-							Type:    "trivy",
-							Enabled: true,
-							Command: CommandConfig{
-								Binary: "/usr/bin/trivy",
-							},
+							Name:     "trivy",
+							Type:     "trivy",
+							Enabled:  true,
+							Settings: map[string]any{"command": map[string]any{"binary": "/usr/bin/trivy"}},
 						},
 					},
 				},
@@ -134,10 +134,10 @@ func TestValidateConfig(t *testing.T) {
 				Scanners: ScannersConfig{
 					Concurrency: 0,
 					Scanners: []ScannerConfig{{
-						Name:    "trivy",
-						Type:    "trivy",
-						Enabled: true,
-						Command: CommandConfig{Binary: "/usr/bin/trivy"},
+						Name:     "trivy",
+						Type:     "trivy",
+						Enabled:  true,
+						Settings: map[string]any{"command": map[string]any{"binary": "/usr/bin/trivy"}},
 					}},
 				},
 				State: StateConfig{TTL: 72 * time.Hour},
@@ -207,10 +207,10 @@ func TestValidateConfig(t *testing.T) {
 				Scanners: ScannersConfig{
 					Concurrency: 1,
 					Scanners: []ScannerConfig{{
-						Name:    "trivy",
-						Type:    "trivy",
-						Enabled: true,
-						Command: CommandConfig{Binary: "/usr/bin/trivy"},
+						Name:     "trivy",
+						Type:     "trivy",
+						Enabled:  true,
+						Settings: map[string]any{"command": map[string]any{"binary": "/usr/bin/trivy"}},
 					}},
 				},
 				State:   StateConfig{TTL: 72 * time.Hour},
@@ -228,10 +228,10 @@ func TestValidateConfig(t *testing.T) {
 				Scanners: ScannersConfig{
 					Concurrency: 1,
 					Scanners: []ScannerConfig{{
-						Name:    "trivy",
-						Type:    "trivy",
-						Enabled: true,
-						Command: CommandConfig{Binary: "/usr/bin/trivy"},
+						Name:     "trivy",
+						Type:     "trivy",
+						Enabled:  true,
+						Settings: map[string]any{"command": map[string]any{"binary": "/usr/bin/trivy"}},
 					}},
 				},
 				State:   StateConfig{TTL: 72 * time.Hour},
@@ -351,7 +351,7 @@ func TestValidateConfig(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name: "trivy-operator resources cannot include empty values",
+			name: "trivy-operator resources are scanner-owned validation",
 			config: &Config{
 				ClusterName: "test",
 				Workloads: WorkloadsConfig{
@@ -360,10 +360,10 @@ func TestValidateConfig(t *testing.T) {
 				Scanners: ScannersConfig{
 					Concurrency: 1,
 					Scanners: []ScannerConfig{{
-						Name:      "trivy-operator",
-						Type:      "trivy-operator",
-						Enabled:   true,
-						Resources: []string{"vulnerabilityreports", ""},
+						Name:     "trivy-operator",
+						Type:     "trivy-operator",
+						Enabled:  true,
+						Settings: map[string]any{"resources": []any{"vulnerabilityreports", ""}},
 					}},
 				},
 				Publishing: PublishingConfig{Mode: PublishingModeKomodor},
@@ -372,7 +372,7 @@ func TestValidateConfig(t *testing.T) {
 					BaseURL: "https://app.komodor.io",
 				},
 			},
-			wantError: true,
+			wantError: false,
 		},
 	}
 

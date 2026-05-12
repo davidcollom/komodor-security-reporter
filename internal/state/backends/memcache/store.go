@@ -5,11 +5,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
-	"github.com/davidcollom/komodor-security-reporter/internal/config"
 	"github.com/davidcollom/komodor-security-reporter/internal/state"
 	gocache "github.com/eko/gocache/lib/v4/cache"
 	gocachestore "github.com/eko/gocache/lib/v4/store"
@@ -168,11 +166,7 @@ type Backend struct {
 }
 
 // NewBackend creates a Memcache-backed state.Backend from the given config.
-func NewBackend(cfg config.MemcacheConfig, ttl time.Duration) (*Backend, error) {
-	if strings.TrimSpace(cfg.Address) == "" {
-		return nil, fmt.Errorf("state.memcache.address is required")
-	}
-
+func NewBackend(cfg Config, ttl time.Duration) (*Backend, error) {
 	client := memcache.New(cfg.Address)
 	if cfg.Timeout > 0 {
 		client.Timeout = cfg.Timeout

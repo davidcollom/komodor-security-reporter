@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davidcollom/komodor-security-reporter/internal/config"
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners"
 	"github.com/stretchr/testify/require"
 )
@@ -67,8 +66,8 @@ func TestExecuteScannerWithResilienceRetriesTransientErrors(t *testing.T) {
 		runtimePolicy:  runtimePolicy,
 		circuitBreaker: newScannerCircuitBreaker(runtimePolicy, time.Now),
 		sleep:          func(context.Context, time.Duration) error { return nil },
-		scannerConfigsByName: map[string]config.ScannerConfig{
-			"trivy": {Name: "trivy", Command: config.CommandConfig{Timeout: 2 * time.Second}},
+		scannerTimeoutsByName: map[string]time.Duration{
+			"trivy": 2 * time.Second,
 		},
 	}
 
@@ -102,8 +101,8 @@ func TestExecuteScannerWithResilienceTimeoutClassification(t *testing.T) {
 		runtimePolicy:  runtimePolicy,
 		circuitBreaker: newScannerCircuitBreaker(runtimePolicy, time.Now),
 		sleep:          func(context.Context, time.Duration) error { return nil },
-		scannerConfigsByName: map[string]config.ScannerConfig{
-			"trivy": {Name: "trivy", Command: config.CommandConfig{Timeout: 2 * time.Second}},
+		scannerTimeoutsByName: map[string]time.Duration{
+			"trivy": 2 * time.Second,
 		},
 	}
 
@@ -138,8 +137,8 @@ func TestExecuteScannerWithResilienceCircuitOpensAndClosesAfterProbeSuccess(t *t
 		runtimePolicy:  runtimePolicy,
 		circuitBreaker: cb,
 		sleep:          func(context.Context, time.Duration) error { return nil },
-		scannerConfigsByName: map[string]config.ScannerConfig{
-			"clair": {Name: "clair", Command: config.CommandConfig{Timeout: 2 * time.Second}},
+		scannerTimeoutsByName: map[string]time.Duration{
+			"clair": 2 * time.Second,
 		},
 	}
 

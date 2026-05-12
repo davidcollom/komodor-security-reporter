@@ -10,6 +10,7 @@ import (
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners"
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners/command"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 func init() {
@@ -19,13 +20,13 @@ func init() {
 // newScannerFactory creates a Trivy scanner from configuration.
 // Trivy is a native Go application, so no separate binary installation is strictly required.
 // If binary path is omitted, defaults to "trivy" on system PATH.
-func newScannerFactory(_ config.ScannerConfig, binary string, log logrus.FieldLogger) (scanners.Scanner, error) {
-	// Default to "trivy" if no binary path specified; relies on PATH
-	if binary == "" {
-		binary = "trivy"
+func newScannerFactory(_ config.ScannerConfig, scopedConfig *viper.Viper, log logrus.FieldLogger) (scanners.Scanner, *time.Duration, error) {
+	cfg, timeout, err := parseConfig(scopedConfig)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return NewScanner(binary, log), nil
+	return NewScanner(cfg.Command.Binary, log), &timeout, nil
 }
 
 // Scanner implements the scanners.Scanner interface for Trivy.

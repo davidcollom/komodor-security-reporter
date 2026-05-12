@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
@@ -68,7 +67,7 @@ func newLoader() *viper.Viper {
 	v.SetDefault("scanners.runtime.circuitBreaker.halfOpenMaxRequests", DefaultScannerCircuitHalfOpenMaxRequests)
 	v.SetDefault("publishing.mode", PublishingModeKomodor)
 	v.SetDefault("publishing.dedupeTTL", "24h")
-	v.SetDefault("scanners.scanners", []map[string]any{})
+	v.SetDefault("scanners.scanners", []map[any]any{})
 
 	return v
 }
@@ -99,16 +98,7 @@ func unmarshalConfig(v *viper.Viper) (*Config, error) {
 		return nil, fmt.Errorf("decode config: %w", err)
 	}
 
-	for i := range cfg.Scanners.Scanners {
-		if cfg.Scanners.Scanners[i].Command.Timeout == 0 {
-			// Only apply the default when the field is absent from configuration.
-			// An explicit timeout: 0s is preserved (treated as no timeout).
-			key := fmt.Sprintf("scanners.scanners.%d.command.timeout", i)
-			if !v.IsSet(key) {
-				cfg.Scanners.Scanners[i].Command.Timeout = 5 * time.Minute
-			}
-		}
-	}
+	cfg.source = v
 
 	return &cfg, nil
 }

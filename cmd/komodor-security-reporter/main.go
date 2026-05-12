@@ -21,6 +21,7 @@ import (
 	appversion "github.com/davidcollom/komodor-security-reporter/internal/version"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -120,6 +121,7 @@ func run() error {
 		components.imageExtractor,
 		components.resolver,
 		components.scannerRegistry,
+		components.scannerTimeouts,
 		components.publisher,
 		components.stateStore,
 		log,
@@ -199,13 +201,19 @@ type runtimeComponents struct {
 	imageExtractor  *controller.ImageExtractor
 	resolver        *registry.Resolver
 	scannerRegistry map[string]scanners.Scanner
+	scannerTimeouts map[string]time.Duration
 	publisher       *komodor.Publisher
 	clientset       kubernetes.Interface
 	stateStore      state.Backend
 }
 
-func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logrus.FieldLogger, m *metrics.Metrics) (*runtimeComponents, error) {
-	scannerRegistry, err := scanners.CreateScannerRegistry(cfg.Scanners.Scanners, log)
+func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logrus.FieldLogger, _ *metrics.Metrics) (*runtimeComponents, error) {
+	scannerScopes := make([]*viper.Viper, len(cfg.Scanners.Scanners))
+	for i := range cfg.Scanners.Scanners {
+		scannerScopes[i] = cfg.ScannerSubConfig(i)
+	}
+
+	scannerRegistry, scannerTimeouts, err := scanners.CreateScannerRegistry(cfg.Scanners.Scanners, scannerScopes, log)
 	if err != nil {
 		return nil, fmt.Errorf("create scanner registry: %w", err)
 	}
@@ -251,6 +259,7 @@ func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logr
 		imageExtractor:  controller.NewImageExtractor(),
 		resolver:        registry.NewResolver(log),
 		scannerRegistry: scannerRegistry,
+		scannerTimeouts: scannerTimeouts,
 		publisher:       publisher,
 		clientset:       clientset,
 		stateStore:      stateStore,
@@ -258,7 +267,7 @@ func setupRuntimeComponents(cfg *config.Config, k8sConfig *rest.Config, log logr
 }
 
 func buildStateStore(cfg *config.Config, clientset kubernetes.Interface, namespace string) (state.Backend, error) {
-	return statebackends.New(cfg.State, namespace, clientset)
+	return statebackends.New(cfg.State, cfg.SubConfig("state"), namespace, clientset)
 }
 
 func stateStoreNamespace(configNamespace string) string {

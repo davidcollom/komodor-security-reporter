@@ -92,8 +92,6 @@ komodor:
 	require.Equal(t, DefaultScannerCircuitFailureThreshold, cfg.Scanners.Runtime.CircuitBreaker.FailureThreshold)
 	require.Equal(t, DefaultScannerCircuitOpenDuration, cfg.Scanners.Runtime.CircuitBreaker.OpenDuration)
 	require.Equal(t, DefaultScannerCircuitHalfOpenMaxRequests, cfg.Scanners.Runtime.CircuitBreaker.HalfOpenMaxRequests)
-	// Should default to 5 minutes
-	require.Equal(t, 5*time.Minute, cfg.Scanners.Scanners[0].Command.Timeout)
 }
 
 func TestLoadFromBytesInvalidScannerRuntime(t *testing.T) {
@@ -215,7 +213,7 @@ komodor:
 	cfg, err := LoadFromBytes(yaml)
 
 	require.NoError(t, err)
-	require.Equal(t, 10*time.Second, cfg.Scanners.Scanners[0].Command.Timeout)
+	require.Equal(t, map[string]any{"timeout": "10s"}, cfg.Scanners.Scanners[0].Settings["command"])
 }
 
 func TestLoadFromBytesInvalidTimeout(t *testing.T) {
@@ -238,8 +236,7 @@ komodor:
 
 	_, err := LoadFromBytes(yaml)
 
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "parse scanner timeout")
+	require.NoError(t, err)
 }
 
 func TestLoadFromBytesAllowsScannerBinaryOverrideToBeOmitted(t *testing.T) {
@@ -262,8 +259,7 @@ komodor:
 	cfg, err := LoadFromBytes(yaml)
 
 	require.NoError(t, err)
-	require.Equal(t, "", cfg.Scanners.Scanners[0].Command.Binary)
-	require.Equal(t, 10*time.Second, cfg.Scanners.Scanners[0].Command.Timeout)
+	require.Equal(t, map[string]any{"timeout": "10s"}, cfg.Scanners.Scanners[0].Settings["command"])
 }
 
 func TestLoadFromBytesParsesScannerResources(t *testing.T) {
@@ -287,7 +283,7 @@ komodor:
 	cfg, err := LoadFromBytes(yaml)
 
 	require.NoError(t, err)
-	require.Equal(t, []string{"vulnerabilityreports", "clustervulnerabilityreports"}, cfg.Scanners.Scanners[0].Resources)
+	require.Equal(t, []any{"vulnerabilityreports", "clustervulnerabilityreports"}, cfg.Scanners.Scanners[0].Settings["resources"])
 }
 
 func TestLoadFromBytesParsesPublishingMode(t *testing.T) {

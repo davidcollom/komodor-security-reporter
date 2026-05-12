@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/davidcollom/komodor-security-reporter/internal/config"
 	"github.com/davidcollom/komodor-security-reporter/internal/state"
 	gocachestore "github.com/eko/gocache/lib/v4/store"
 	redisclient "github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -216,7 +216,7 @@ func TestBackendDeleteEntry(t *testing.T) {
 func TestNewBackendRequiresAddress(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewBackend(config.RedisConfig{Address: ""}, time.Hour)
+	_, err := ParseConfig(viper.New())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "state.redis.address is required")
 }

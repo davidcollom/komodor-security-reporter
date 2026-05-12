@@ -11,22 +11,20 @@ import (
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners"
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners/command"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 func init() {
 	scanners.RegisterScanner("clair", newScannerFactory)
 }
 
-func newScannerFactory(_ config.ScannerConfig, binary string, log logrus.FieldLogger) (scanners.Scanner, error) {
-	return NewScanner(defaultBinary(binary), log), nil
-}
-
-func defaultBinary(binary string) string {
-	if binary == "" || binary == "clair" {
-		return "clairctl"
+func newScannerFactory(_ config.ScannerConfig, scopedConfig *viper.Viper, log logrus.FieldLogger) (scanners.Scanner, *time.Duration, error) {
+	cfg, timeout, err := parseConfig(scopedConfig)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return binary
+	return NewScanner(cfg.Command.Binary, log), &timeout, nil
 }
 
 // Scanner implements the scanners.Scanner interface for Clair CLI.
