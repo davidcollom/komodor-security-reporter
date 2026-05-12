@@ -17,8 +17,15 @@ type Config struct {
 func ParseConfig(scopedConfig *viper.Viper) (Config, error) {
 	cfg := Config{}
 
+	decodeScope := scopedConfig
 	if scopedConfig != nil {
-		err := scopedConfig.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
+		if sub := scopedConfig.Sub("memory"); sub != nil {
+			decodeScope = sub
+		}
+	}
+
+	if decodeScope != nil {
+		err := decodeScope.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
 			dc.TagName = "mapstructure"
 			dc.DecodeHook = mapstructure.ComposeDecodeHookFunc(
 				mapstructure.StringToTimeDurationHookFunc(),

@@ -21,8 +21,15 @@ type Config struct {
 func ParseConfig(scopedConfig *viper.Viper) (Config, error) {
 	cfg := Config{}
 
+	decodeScope := scopedConfig
 	if scopedConfig != nil {
-		err := scopedConfig.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
+		if sub := scopedConfig.Sub("memcache"); sub != nil {
+			decodeScope = sub
+		}
+	}
+
+	if decodeScope != nil {
+		err := decodeScope.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
 			dc.TagName = "mapstructure"
 			dc.DecodeHook = mapstructure.ComposeDecodeHookFunc(
 				mapstructure.StringToTimeDurationHookFunc(),
@@ -31,10 +38,6 @@ func ParseConfig(scopedConfig *viper.Viper) (Config, error) {
 		if err != nil {
 			return Config{}, fmt.Errorf("decode memcache state config: %w", err)
 		}
-	}
-
-	if cfg.Address == "" && scopedConfig != nil {
-		cfg.Address = scopedConfig.GetString("memcache.address")
 	}
 
 	if strings.TrimSpace(cfg.Address) == "" {

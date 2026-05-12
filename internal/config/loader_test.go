@@ -213,7 +213,7 @@ komodor:
 	cfg, err := LoadFromBytes(yaml)
 
 	require.NoError(t, err)
-	require.Equal(t, map[string]any{"timeout": "10s"}, cfg.Scanners.Scanners[0].Settings["command"])
+	require.Equal(t, map[string]any{"binary": "/usr/bin/trivy", "timeout": "10s"}, cfg.Scanners.Scanners[0].Settings["command"])
 }
 
 func TestLoadFromBytesInvalidTimeout(t *testing.T) {
