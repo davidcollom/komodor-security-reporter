@@ -12,6 +12,7 @@ import (
 	"github.com/davidcollom/komodor-security-reporter/internal/config"
 	"github.com/davidcollom/komodor-security-reporter/internal/scanners"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -90,18 +91,28 @@ func loadKubernetesConfig() (*rest.Config, error) {
 	return cfg, nil
 }
 
-func newScannerFactory(scannerCfg config.ScannerConfig, _ string, log logrus.FieldLogger) (scanners.Scanner, error) {
-	cfg, err := loadKubernetesConfig()
+func newScannerFactory(_ config.ScannerConfig, scopedConfig *viper.Viper, log logrus.FieldLogger) (scanners.Scanner, *time.Duration, error) {
+	opConfig, err := parseConfig(scopedConfig)
 	if err != nil {
-		return nil, fmt.Errorf("load kubernetes config for trivy-operator scanner: %w", err)
+		return nil, nil, err
 	}
 
-	dynClient, err := dynamic.NewForConfig(cfg)
+	kubeConfig, err := loadKubernetesConfig()
 	if err != nil {
-		return nil, fmt.Errorf("create dynamic client for trivy-operator scanner: %w", err)
+		return nil, nil, fmt.Errorf("load kubernetes config for trivy-operator scanner: %w", err)
 	}
 
-	return NewScanner(&dynamicReportLister{client: dynClient}, scannerCfg.Resources, log)
+	dynClient, err := dynamic.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create dynamic client for trivy-operator scanner: %w", err)
+	}
+
+	scanner, err := NewScanner(&dynamicReportLister{client: dynClient}, opConfig.Resources, log)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return scanner, nil, nil
 }
 
 // Scanner reads vulnerability data from Trivy Operator VulnerabilityReport CRDs.

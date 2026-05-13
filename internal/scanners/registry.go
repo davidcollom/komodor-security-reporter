@@ -2,13 +2,15 @@ package scanners
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/davidcollom/komodor-security-reporter/internal/config"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 // ScannerFactory creates a scanner from configuration.
-type ScannerFactory func(scannerCfg config.ScannerConfig, binaryPath string, log logrus.FieldLogger) (Scanner, error)
+type ScannerFactory func(scannerCfg config.ScannerConfig, scopedConfig *viper.Viper, log logrus.FieldLogger) (Scanner, *time.Duration, error)
 
 var scannerFactories = make(map[string]ScannerFactory)
 
@@ -18,10 +20,12 @@ func RegisterScanner(scannerType string, factory ScannerFactory) {
 }
 
 // CreateScannerRegistry creates a scanner registry from configuration.
-func CreateScannerRegistry(scannerConfigs []config.ScannerConfig, log logrus.FieldLogger) (map[string]Scanner, error) {
+func CreateScannerRegistry(scannerConfigs []config.ScannerConfig, scannerScopes []*viper.Viper, log logrus.FieldLogger) (map[string]Scanner, map[string]time.Duration, error) {
 	registry := make(map[string]Scanner)
+	timeoutOverrides := make(map[string]time.Duration)
 
-	for _, scannerCfg := range scannerConfigs {
+	for i := range scannerConfigs {
+		scannerCfg := scannerConfigs[i]
 		if !scannerCfg.Enabled {
 			continue
 		}
@@ -32,18 +36,21 @@ func CreateScannerRegistry(scannerConfigs []config.ScannerConfig, log logrus.Fie
 			continue
 		}
 
-		binaryPath := scannerCfg.Command.Binary
-		if binaryPath == "" {
-			binaryPath = scannerCfg.Type
+		var scope *viper.Viper
+		if i < len(scannerScopes) {
+			scope = scannerScopes[i]
 		}
 
-		scanner, err := factory(scannerCfg, binaryPath, log)
+		scanner, timeoutOverride, err := factory(scannerCfg, scope, log)
 		if err != nil {
-			return nil, fmt.Errorf("create scanner %s (%s): %w", scannerCfg.Name, scannerCfg.Type, err)
+			return nil, nil, fmt.Errorf("create scanner %s (%s): %w", scannerCfg.Name, scannerCfg.Type, err)
 		}
 
 		registry[scannerCfg.Name] = scanner
+		if timeoutOverride != nil {
+			timeoutOverrides[scannerCfg.Name] = *timeoutOverride
+		}
 	}
 
-	return registry, nil
+	return registry, timeoutOverrides, nil
 }

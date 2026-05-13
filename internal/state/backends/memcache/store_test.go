@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
-	"github.com/davidcollom/komodor-security-reporter/internal/config"
 	"github.com/davidcollom/komodor-security-reporter/internal/state"
 	gocachestore "github.com/eko/gocache/lib/v4/store"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -198,7 +198,7 @@ func TestBackendSetGetDelete(t *testing.T) {
 func TestNewBackendRequiresAddress(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewBackend(config.MemcacheConfig{}, time.Hour)
+	_, err := ParseConfig(viper.New())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "state.memcache.address is required")
 }

@@ -236,8 +236,8 @@ func (r *Reconciler) executeScannerWithResilience(
 }
 
 func (r *Reconciler) timeoutForScanner(scannerName string) time.Duration {
-	if scannerCfg, ok := r.scannerConfigsByName[scannerName]; ok && scannerCfg.Command.Timeout > 0 {
-		return scannerCfg.Command.Timeout
+	if timeout, ok := r.scannerTimeoutsByName[scannerName]; ok {
+		return timeout
 	}
 
 	return r.runtimePolicy.Timeout

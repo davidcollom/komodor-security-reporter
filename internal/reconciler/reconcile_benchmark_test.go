@@ -161,6 +161,7 @@ func buildBenchmarkReconciler(b *testing.B, scenario benchmarkScenario, komodorU
 		controller.NewImageExtractor(),
 		registry.NewResolver(log),
 		registryMap,
+		map[string]time.Duration{},
 		komodor.NewPublisher(client),
 		stateconfigmap.NewBackend(clientset, namespace, "benchmark-state", cfg.State.TTL),
 		log,

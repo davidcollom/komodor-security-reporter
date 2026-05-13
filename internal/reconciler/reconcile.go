@@ -24,19 +24,19 @@ import (
 
 // Reconciler orchestrates vulnerability scanning and event publishing.
 type Reconciler struct {
-	clientset            kubernetes.Interface
-	cfg                  *config.Config
-	imageExtractor       *controller.ImageExtractor
-	resolver             *registry.Resolver
-	scannerRegistry      map[string]scanners.Scanner
-	scannerConfigsByName map[string]config.ScannerConfig
-	publisher            *komodor.Publisher
-	stateStore           state.Backend
-	log                  logrus.FieldLogger
-	metrics              *metrics.Metrics
-	runtimePolicy        scannerRuntimePolicy
-	circuitBreaker       *scannerCircuitBreaker
-	sleep                func(context.Context, time.Duration) error
+	clientset             kubernetes.Interface
+	cfg                   *config.Config
+	imageExtractor        *controller.ImageExtractor
+	resolver              *registry.Resolver
+	scannerRegistry       map[string]scanners.Scanner
+	scannerTimeoutsByName map[string]time.Duration
+	publisher             *komodor.Publisher
+	stateStore            state.Backend
+	log                   logrus.FieldLogger
+	metrics               *metrics.Metrics
+	runtimePolicy         scannerRuntimePolicy
+	circuitBreaker        *scannerCircuitBreaker
+	sleep                 func(context.Context, time.Duration) error
 }
 
 // NewReconciler creates a new reconciler instance.
@@ -46,6 +46,7 @@ func NewReconciler(
 	imageExtractor *controller.ImageExtractor,
 	resolver *registry.Resolver,
 	scannerRegistry map[string]scanners.Scanner,
+	scannerTimeoutsByName map[string]time.Duration,
 	publisher *komodor.Publisher,
 	stateStore state.Backend,
 	log logrus.FieldLogger,
@@ -53,26 +54,20 @@ func NewReconciler(
 ) *Reconciler {
 	runtimePolicy := newScannerRuntimePolicy(cfg.Scanners.Runtime)
 
-	scannerConfigsByName := make(map[string]config.ScannerConfig, len(cfg.Scanners.Scanners))
-	for i := range cfg.Scanners.Scanners {
-		scannerCfg := cfg.Scanners.Scanners[i]
-		scannerConfigsByName[scannerCfg.Name] = scannerCfg
-	}
-
 	return &Reconciler{
-		clientset:            clientset,
-		cfg:                  cfg,
-		imageExtractor:       imageExtractor,
-		resolver:             resolver,
-		scannerRegistry:      scannerRegistry,
-		scannerConfigsByName: scannerConfigsByName,
-		publisher:            publisher,
-		stateStore:           stateStore,
-		log:                  log,
-		metrics:              metrics,
-		runtimePolicy:        runtimePolicy,
-		circuitBreaker:       newScannerCircuitBreaker(runtimePolicy, time.Now),
-		sleep:                sleepWithContext,
+		clientset:             clientset,
+		cfg:                   cfg,
+		imageExtractor:        imageExtractor,
+		resolver:              resolver,
+		scannerRegistry:       scannerRegistry,
+		scannerTimeoutsByName: scannerTimeoutsByName,
+		publisher:             publisher,
+		stateStore:            stateStore,
+		log:                   log,
+		metrics:               metrics,
+		runtimePolicy:         runtimePolicy,
+		circuitBreaker:        newScannerCircuitBreaker(runtimePolicy, time.Now),
+		sleep:                 sleepWithContext,
 	}
 }
 
