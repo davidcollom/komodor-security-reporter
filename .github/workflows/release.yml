@@ -26,7 +26,7 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -199,7 +199,7 @@ jobs:
       id-token: write # required for cosign keyless signing
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: refs/tags/${{ needs.prepare-release.outputs.tag }}
