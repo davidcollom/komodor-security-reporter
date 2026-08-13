@@ -114,15 +114,17 @@ func parseResult(data []byte, image scanners.ImageRef) (*scanners.ScanResult, er
 			incrementSummary(&result.Summary, sev)
 
 			finding := scanners.Finding{
-				ID:          vuln.VulnerabilityID,
-				CVE:         normalizeCVE(vuln.VulnerabilityID),
-				Package:     vuln.PkgName,
-				Installed:   vuln.InstalledVersion,
-				Fixed:       vuln.FixedVersion,
-				Severity:    sev,
-				Title:       vuln.Title,
-				URL:         vuln.PrimaryURL,
-				Exploitable: false, // Trivy doesn't provide exploit status
+				ID:                 vuln.VulnerabilityID,
+				CVE:                normalizeCVE(vuln.VulnerabilityID),
+				Package:            vuln.PkgName,
+				Installed:          vuln.InstalledVersion,
+				Fixed:              vuln.FixedVersion,
+				Severity:           sev,
+				Title:              vuln.Title,
+				URL:                vuln.PrimaryURL,
+				Exploitable:        false, // Trivy doesn't provide exploit status
+				FixAvailable:       vuln.FixedVersion != "",
+				ScannerAttribution: "trivy",
 			}
 
 			result.Findings = append(result.Findings, finding)

@@ -48,15 +48,27 @@ func (vs VulnerabilitySummary) Total() int {
 	return vs.Critical + vs.High + vs.Medium + vs.Low + vs.Unknown
 }
 
+// RiskHints holds optional risk-scoring metadata for a finding.
+// Fields are populated on a best-effort basis depending on scanner output.
+type RiskHints struct {
+	// EPSSScore is the Exploit Prediction Scoring System score (0.0–1.0), when available.
+	EPSSScore float64 `json:"epssScore,omitempty"`
+	// KEV indicates whether the CVE appears in CISA's Known Exploited Vulnerabilities catalogue.
+	KEV bool `json:"kev,omitempty"`
+}
+
 // Finding represents a single vulnerability finding.
 type Finding struct {
-	ID          string
-	CVE         string
-	Package     string
-	Installed   string
-	Fixed       string
-	Severity    Severity
-	Title       string
-	URL         string
-	Exploitable bool
+	ID                 string
+	CVE                string
+	Package            string
+	Installed          string
+	Fixed              string
+	Severity           Severity
+	Title              string
+	URL                string
+	Exploitable        bool
+	FixAvailable       bool      // True when a fixed version has been reported by the scanner.
+	ScannerAttribution string    // Scanner that produced this finding (e.g. "trivy", "snyk").
+	RiskHints          RiskHints // Optional risk-scoring hints.
 }
