@@ -36,6 +36,10 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: "go.mod"
+          cache: true
+
+      - name: Download modules
+        run: go mod download
 
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.out ./...
@@ -54,6 +58,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: "go.mod"
+          cache: true
 
       - uses: golangci/golangci-lint-action@v9
         with:
@@ -68,6 +73,10 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: "go.mod"
+          cache: true
+
+      - name: Download modules
+        run: go mod download
 
       - name: Run go vet
         run: go vet ./...
@@ -80,6 +89,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: "go.mod"
+          cache: true
 
       - name: Check formatting
         run: |
