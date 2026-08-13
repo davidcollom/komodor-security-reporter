@@ -340,7 +340,9 @@ func (r *Reconciler) reconcileWorkload(ctx context.Context, namespace string, wl
 			}
 
 			waitStart := time.Now()
+
 			semaphore <- struct{}{}
+
 			waitDuration := time.Since(waitStart)
 
 			if r.metrics != nil && r.metrics.ScanQueueDepth != nil {
