@@ -117,8 +117,8 @@ func parseResult(data []byte, image scanners.ImageRef) (*scanners.ScanResult, er
 				toString(vuln["version"]),
 				toString(vuln["featureVersion"]),
 			),
-			Fixed:              fixedVersion,
-			Severity:           sev,
+			Fixed:    fixedVersion,
+			Severity: sev,
 			Title: firstNonEmpty(
 				toString(vuln["title"]),
 				toString(vuln["name"]),
