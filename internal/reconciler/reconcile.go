@@ -359,6 +359,7 @@ func (r *Reconciler) reconcileWorkload(ctx context.Context, namespace string, wl
 			if err := r.backpressure.Wait(ctx); err != nil {
 				scanWaitGroup.Done()
 				<-semaphore
+
 				return fmt.Errorf("backpressure wait: %w", err)
 			}
 
