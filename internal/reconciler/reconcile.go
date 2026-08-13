@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davidcollom/komodor-security-reporter/internal/concurrency"
 	"github.com/davidcollom/komodor-security-reporter/internal/config"
 	"github.com/davidcollom/komodor-security-reporter/internal/controller"
 	"github.com/davidcollom/komodor-security-reporter/internal/komodor"
@@ -37,6 +38,7 @@ type Reconciler struct {
 	runtimePolicy         scannerRuntimePolicy
 	circuitBreaker        *scannerCircuitBreaker
 	sleep                 func(context.Context, time.Duration) error
+	backpressure          *concurrency.AdaptiveLimiter
 }
 
 // NewReconciler creates a new reconciler instance.
@@ -53,6 +55,8 @@ func NewReconciler(
 	metrics *metrics.Metrics,
 ) *Reconciler {
 	runtimePolicy := newScannerRuntimePolicy(cfg.Scanners.Runtime)
+	effective := config.EffectiveScannersConfig(cfg.Scanners)
+	bp := effective.Backpressure
 
 	return &Reconciler{
 		clientset:             clientset,
@@ -68,6 +72,7 @@ func NewReconciler(
 		runtimePolicy:         runtimePolicy,
 		circuitBreaker:        newScannerCircuitBreaker(runtimePolicy, time.Now),
 		sleep:                 sleepWithContext,
+		backpressure:          concurrency.NewAdaptiveLimiter(bp.MaxRPS, bp.MinRPS, bp.ErrorRateThreshold),
 	}
 }
 
@@ -81,7 +86,16 @@ func (r *Reconciler) ReconcileAll(ctx context.Context) error {
 		return fmt.Errorf("resolve namespaces: %w", err)
 	}
 
-	totalWorkloads := 0
+	effective := config.EffectiveScannersConfig(r.cfg.Scanners)
+	nsConcurrency := effective.NamespaceConcurrency
+
+	nsSemaphore := make(chan struct{}, nsConcurrency)
+
+	var (
+		totalWorkloadsMu sync.Mutex
+		totalWorkloads   int
+		nsWg             sync.WaitGroup
+	)
 
 	for _, ns := range namespaces {
 		if isExcluded(ns, r.cfg.Namespaces.Exclude) {
@@ -89,37 +103,74 @@ func (r *Reconciler) ReconcileAll(ctx context.Context) error {
 			continue
 		}
 
-		nsLog := r.log.WithField("namespace", ns)
+		nsWg.Add(1)
 
-		for _, kind := range r.cfg.Workloads.Kinds {
-			workloads, err := r.listWorkloads(ctx, ns, kind)
-			if err != nil {
-				nsLog.WithError(err).Warnf("failed to list %s workloads", kind)
-				continue
+		if r.metrics != nil && r.metrics.NamespaceScanQueueDepth != nil {
+			r.metrics.NamespaceScanQueueDepth.Inc()
+		}
+
+		select {
+		case nsSemaphore <- struct{}{}:
+		case <-ctx.Done():
+			nsWg.Done()
+
+			if r.metrics != nil && r.metrics.NamespaceScanQueueDepth != nil {
+				r.metrics.NamespaceScanQueueDepth.Dec()
 			}
 
-			totalWorkloads += len(workloads)
-			nsLog.WithFields(logrus.Fields{
-				"kind":           kind,
-				"workload_count": len(workloads),
-			}).Debug("discovered workloads for reconciliation")
+			nsWg.Wait()
+			r.metrics.ReconcileRunsTotal.WithLabelValues("error").Inc()
 
-			for _, wl := range workloads {
-				if err := r.reconcileWorkload(ctx, ns, wl); err != nil {
-					r.metrics.WorkloadsReconciledTotal.WithLabelValues("error").Inc()
-					r.log.WithFields(logrus.Fields{
-						"namespace": ns,
-						"kind":      wl.Kind,
-						"workload":  wl.Name,
-					}).WithError(err).Warn("workload reconciliation failed")
+			return fmt.Errorf("namespace queue wait: %w", ctx.Err())
+		}
 
+		if r.metrics != nil && r.metrics.NamespaceScanQueueDepth != nil {
+			r.metrics.NamespaceScanQueueDepth.Dec()
+		}
+
+		go func(ns string) {
+			defer nsWg.Done()
+			defer func() { <-nsSemaphore }()
+
+			nsLog := r.log.WithField("namespace", ns)
+			nsWorkloads := 0
+
+			for _, kind := range r.cfg.Workloads.Kinds {
+				workloads, err := r.listWorkloads(ctx, ns, kind)
+				if err != nil {
+					nsLog.WithError(err).Warnf("failed to list %s workloads", kind)
 					continue
 				}
 
-				r.metrics.WorkloadsReconciledTotal.WithLabelValues("success").Inc()
+				nsWorkloads += len(workloads)
+				nsLog.WithFields(logrus.Fields{
+					"kind":           kind,
+					"workload_count": len(workloads),
+				}).Debug("discovered workloads for reconciliation")
+
+				for _, wl := range workloads {
+					if err := r.reconcileWorkload(ctx, ns, wl); err != nil {
+						r.metrics.WorkloadsReconciledTotal.WithLabelValues("error").Inc()
+						r.log.WithFields(logrus.Fields{
+							"namespace": ns,
+							"kind":      wl.Kind,
+							"workload":  wl.Name,
+						}).WithError(err).Warn("workload reconciliation failed")
+
+						continue
+					}
+
+					r.metrics.WorkloadsReconciledTotal.WithLabelValues("success").Inc()
+				}
 			}
-		}
+
+			totalWorkloadsMu.Lock()
+			totalWorkloads += nsWorkloads
+			totalWorkloadsMu.Unlock()
+		}(ns)
 	}
+
+	nsWg.Wait()
 
 	r.log.WithFields(logrus.Fields{
 		"namespace_count": len(namespaces),
@@ -288,10 +339,28 @@ func (r *Reconciler) reconcileWorkload(ctx context.Context, namespace string, wl
 				r.metrics.ScanQueueDepth.Inc()
 			}
 
+			waitStart := time.Now()
+
 			semaphore <- struct{}{}
+
+			waitDuration := time.Since(waitStart)
 
 			if r.metrics != nil && r.metrics.ScanQueueDepth != nil {
 				r.metrics.ScanQueueDepth.Dec()
+			}
+
+			if r.metrics != nil && r.metrics.ScanQueueWaitSeconds != nil {
+				r.metrics.ScanQueueWaitSeconds.Observe(waitDuration.Seconds())
+			}
+
+			// Apply adaptive backpressure before dispatching the scan goroutine.
+			// A cancelled context causes Wait to return immediately with an error,
+			// so we treat that as a signal to stop dispatching.
+			if err := r.backpressure.Wait(ctx); err != nil {
+				scanWaitGroup.Done()
+				<-semaphore
+
+				return fmt.Errorf("backpressure wait: %w", err)
 			}
 
 			if r.metrics != nil && r.metrics.ScansInFlight != nil {
@@ -383,6 +452,7 @@ func (r *Reconciler) runScannerForImage(
 
 	scanResult, scanDuration, errClass, err := r.executeScannerWithResilience(ctx, scanner, scanImageRef)
 	if err != nil {
+		r.backpressure.RecordResult(true)
 		scannerLog.WithFields(logrus.Fields{
 			"error_class": errClass,
 		}).WithError(err).Warn("scan failed")
@@ -403,6 +473,7 @@ func (r *Reconciler) runScannerForImage(
 
 	r.metrics.ScansTotal.Inc()
 	r.metrics.ScanDurationSeconds.Observe(scanDuration)
+	r.backpressure.RecordResult(false)
 	scannerLog.WithFields(logrus.Fields{
 		"duration_seconds": scanDuration,
 		"finding_count":    scanResult.Summary.Total(),

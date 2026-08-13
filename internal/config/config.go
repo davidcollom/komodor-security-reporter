@@ -25,6 +25,16 @@ const (
 	DefaultScannerCircuitOpenDuration = 2 * time.Minute
 	// DefaultScannerCircuitHalfOpenMaxRequests is the number of probe requests allowed while half-open.
 	DefaultScannerCircuitHalfOpenMaxRequests = 1
+	// DefaultNamespaceConcurrency is the default number of namespaces processed concurrently.
+	DefaultNamespaceConcurrency = 4
+	// DefaultBackpressureErrorRateThreshold is the scan error rate (0–1) above which adaptive
+	// backpressure begins throttling scan dispatch.
+	DefaultBackpressureErrorRateThreshold = 0.5
+	// DefaultBackpressureMinRPS is the minimum allowed scan dispatch rate (requests per second)
+	// when backpressure is fully engaged.
+	DefaultBackpressureMinRPS = 1.0
+	// DefaultBackpressureMaxRPS is the nominal (unconstrained) scan dispatch rate.
+	DefaultBackpressureMaxRPS = 100.0
 )
 
 // Supported state backend names.
@@ -82,9 +92,27 @@ type StateConfig struct {
 
 // ScannersConfig defines scanner configurations.
 type ScannersConfig struct {
-	Concurrency int                  `mapstructure:"concurrency"`
-	Runtime     ScannerRuntimeConfig `mapstructure:"runtime"`
-	Scanners    []ScannerConfig      `mapstructure:"scanners"`
+	// Concurrency is the maximum number of concurrent scanner goroutines per workload.
+	Concurrency int `mapstructure:"concurrency"`
+	// NamespaceConcurrency is the maximum number of namespaces processed concurrently.
+	// Defaults to DefaultNamespaceConcurrency when zero.
+	NamespaceConcurrency int                  `mapstructure:"namespaceConcurrency"`
+	Runtime              ScannerRuntimeConfig `mapstructure:"runtime"`
+	Backpressure         BackpressureConfig   `mapstructure:"backpressure"`
+	Scanners             []ScannerConfig      `mapstructure:"scanners"`
+}
+
+// BackpressureConfig defines adaptive rate-limiting behaviour for degraded downstream dependencies.
+type BackpressureConfig struct {
+	// ErrorRateThreshold is the fraction of scan errors (0–1) above which throttling begins.
+	// Defaults to DefaultBackpressureErrorRateThreshold when zero.
+	ErrorRateThreshold float64 `mapstructure:"errorRateThreshold"`
+	// MinRPS is the minimum scan dispatch rate (requests/second) when fully throttled.
+	// Defaults to DefaultBackpressureMinRPS when zero.
+	MinRPS float64 `mapstructure:"minRPS"`
+	// MaxRPS is the nominal scan dispatch rate (requests/second) when healthy.
+	// Defaults to DefaultBackpressureMaxRPS when zero.
+	MaxRPS float64 `mapstructure:"maxRPS"`
 }
 
 // ScannerRuntimeConfig defines scanner execution resilience behaviour.
@@ -275,6 +303,27 @@ func validateScanners(scanners ScannersConfig) error {
 		return fmt.Errorf("scanner concurrency must be greater than 0")
 	}
 
+	if scanners.NamespaceConcurrency < 0 {
+		return fmt.Errorf("scanners.namespaceConcurrency must be greater than or equal to 0")
+	}
+
+	bp := scanners.Backpressure
+	if bp.ErrorRateThreshold < 0 || bp.ErrorRateThreshold > 1 {
+		return fmt.Errorf("scanners.backpressure.errorRateThreshold must be between 0 and 1")
+	}
+
+	if bp.MinRPS < 0 {
+		return fmt.Errorf("scanners.backpressure.minRPS must be greater than or equal to 0")
+	}
+
+	if bp.MaxRPS < 0 {
+		return fmt.Errorf("scanners.backpressure.maxRPS must be greater than or equal to 0")
+	}
+
+	if bp.MinRPS > 0 && bp.MaxRPS > 0 && bp.MinRPS > bp.MaxRPS {
+		return fmt.Errorf("scanners.backpressure.minRPS must be less than or equal to maxRPS")
+	}
+
 	runtime := EffectiveScannerRuntimeConfig(scanners.Runtime)
 
 	if runtime.Timeout <= 0 {
@@ -320,6 +369,27 @@ func validateScanners(scanners ScannersConfig) error {
 	}
 
 	return nil
+}
+
+// EffectiveScannersConfig applies defaults to scanner configuration fields.
+func EffectiveScannersConfig(scanners ScannersConfig) ScannersConfig {
+	if scanners.NamespaceConcurrency <= 0 {
+		scanners.NamespaceConcurrency = DefaultNamespaceConcurrency
+	}
+
+	if scanners.Backpressure.ErrorRateThreshold == 0 {
+		scanners.Backpressure.ErrorRateThreshold = DefaultBackpressureErrorRateThreshold
+	}
+
+	if scanners.Backpressure.MinRPS == 0 {
+		scanners.Backpressure.MinRPS = DefaultBackpressureMinRPS
+	}
+
+	if scanners.Backpressure.MaxRPS == 0 {
+		scanners.Backpressure.MaxRPS = DefaultBackpressureMaxRPS
+	}
+
+	return scanners
 }
 
 // EffectiveScannerRuntimeConfig applies defaults to scanner runtime settings.
