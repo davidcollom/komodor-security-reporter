@@ -374,6 +374,79 @@ func TestValidateConfig(t *testing.T) {
 			},
 			wantError: false,
 		},
+		{
+			name: "invalid backpressure errorRateThreshold negative",
+			config: &Config{
+				ClusterName: "test",
+				Workloads:   WorkloadsConfig{Kinds: []string{"Deployment"}},
+				Scanners: ScannersConfig{
+					Concurrency: 1,
+					Backpressure: BackpressureConfig{
+						ErrorRateThreshold: -0.1,
+					},
+					Scanners: []ScannerConfig{{Name: "trivy", Type: "trivy", Enabled: true}},
+				},
+				State:   StateConfig{TTL: 72 * time.Hour},
+				Komodor: KomodorConfig{BaseURL: "https://app.komodor.io"},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid backpressure errorRateThreshold above 1",
+			config: &Config{
+				ClusterName: "test",
+				Workloads:   WorkloadsConfig{Kinds: []string{"Deployment"}},
+				Scanners: ScannersConfig{
+					Concurrency: 1,
+					Backpressure: BackpressureConfig{
+						ErrorRateThreshold: 1.5,
+					},
+					Scanners: []ScannerConfig{{Name: "trivy", Type: "trivy", Enabled: true}},
+				},
+				State:   StateConfig{TTL: 72 * time.Hour},
+				Komodor: KomodorConfig{BaseURL: "https://app.komodor.io"},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid backpressure minRPS greater than maxRPS",
+			config: &Config{
+				ClusterName: "test",
+				Workloads:   WorkloadsConfig{Kinds: []string{"Deployment"}},
+				Scanners: ScannersConfig{
+					Concurrency: 1,
+					Backpressure: BackpressureConfig{
+						ErrorRateThreshold: 0.5,
+						MinRPS:             50,
+						MaxRPS:             10,
+					},
+					Scanners: []ScannerConfig{{Name: "trivy", Type: "trivy", Enabled: true}},
+				},
+				State:   StateConfig{TTL: 72 * time.Hour},
+				Komodor: KomodorConfig{BaseURL: "https://app.komodor.io"},
+			},
+			wantError: true,
+		},
+		{
+			name: "valid backpressure config",
+			config: &Config{
+				ClusterName: "test",
+				Workloads:   WorkloadsConfig{Kinds: []string{"Deployment"}},
+				Scanners: ScannersConfig{
+					Concurrency:          2,
+					NamespaceConcurrency: 4,
+					Backpressure: BackpressureConfig{
+						ErrorRateThreshold: 0.5,
+						MinRPS:             1,
+						MaxRPS:             100,
+					},
+					Scanners: []ScannerConfig{{Name: "trivy", Type: "trivy", Enabled: true}},
+				},
+				State:   StateConfig{TTL: 72 * time.Hour},
+				Komodor: KomodorConfig{BaseURL: "https://app.komodor.io"},
+			},
+			wantError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -410,4 +483,31 @@ func TestEnabledScanners(t *testing.T) {
 	}
 
 	require.Equal(t, []string{"trivy (trivy)", "wiz (wiz)"}, cfg.EnabledScanners())
+}
+
+func TestEffectiveScannersConfig_AppliesDefaults(t *testing.T) {
+	effective := EffectiveScannersConfig(ScannersConfig{})
+
+	require.Equal(t, DefaultNamespaceConcurrency, effective.NamespaceConcurrency)
+	require.InDelta(t, DefaultBackpressureErrorRateThreshold, effective.Backpressure.ErrorRateThreshold, 1e-9)
+	require.InDelta(t, DefaultBackpressureMinRPS, effective.Backpressure.MinRPS, 1e-9)
+	require.InDelta(t, DefaultBackpressureMaxRPS, effective.Backpressure.MaxRPS, 1e-9)
+}
+
+func TestEffectiveScannersConfig_PreservesExplicitValues(t *testing.T) {
+	input := ScannersConfig{
+		NamespaceConcurrency: 8,
+		Backpressure: BackpressureConfig{
+			ErrorRateThreshold: 0.3,
+			MinRPS:             2,
+			MaxRPS:             50,
+		},
+	}
+
+	effective := EffectiveScannersConfig(input)
+
+	require.Equal(t, 8, effective.NamespaceConcurrency)
+	require.InDelta(t, 0.3, effective.Backpressure.ErrorRateThreshold, 1e-9)
+	require.InDelta(t, 2.0, effective.Backpressure.MinRPS, 1e-9)
+	require.InDelta(t, 50.0, effective.Backpressure.MaxRPS, 1e-9)
 }

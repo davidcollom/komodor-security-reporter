@@ -16,6 +16,8 @@ type Metrics struct {
 	ScanDurationSeconds        prometheus.Histogram
 	ScansInFlight              prometheus.Gauge
 	ScanQueueDepth             prometheus.Gauge
+	ScanQueueWaitSeconds       prometheus.Histogram
+	NamespaceScanQueueDepth    prometheus.Gauge
 	ScannerErrorClassTotal     *prometheus.CounterVec
 	ScannerCircuitState        *prometheus.GaugeVec
 	ScannerSkippedTotal        *prometheus.CounterVec
@@ -69,6 +71,15 @@ func NewMetrics() *Metrics {
 		ScanQueueDepth: registry.NewGauge(prometheus.GaugeOpts{
 			Name: "image_vuln_watcher_scan_queue_depth",
 			Help: "Current number of scans waiting for concurrency slots",
+		}),
+		ScanQueueWaitSeconds: registry.NewHistogram(prometheus.HistogramOpts{
+			Name:    "image_vuln_watcher_scan_queue_wait_seconds",
+			Help:    "Time a scan spent waiting to acquire a concurrency slot",
+			Buckets: prometheus.DefBuckets,
+		}),
+		NamespaceScanQueueDepth: registry.NewGauge(prometheus.GaugeOpts{
+			Name: "image_vuln_watcher_namespace_scan_queue_depth",
+			Help: "Current number of namespaces waiting for a namespace concurrency slot",
 		}),
 		ScannerErrorClassTotal: registry.NewCounterVec(prometheus.CounterOpts{
 			Name: "image_vuln_watcher_scanner_error_class_total",
