@@ -98,6 +98,11 @@ func parseResult(data []byte, image scanners.ImageRef) (*scanners.ScanResult, er
 			cve = id
 		}
 
+		fixedVersion := firstNonEmpty(
+			toString(vuln["fixedVersion"]),
+			toString(vuln["fixedby"]),
+			toString(vuln["fixedBy"]),
+		)
 		result.Findings = append(result.Findings, scanners.Finding{
 			ID:  id,
 			CVE: cve,
@@ -112,12 +117,8 @@ func parseResult(data []byte, image scanners.ImageRef) (*scanners.ScanResult, er
 				toString(vuln["version"]),
 				toString(vuln["featureVersion"]),
 			),
-			Fixed: firstNonEmpty(
-				toString(vuln["fixedVersion"]),
-				toString(vuln["fixedby"]),
-				toString(vuln["fixedBy"]),
-			),
-			Severity: sev,
+			Fixed:              fixedVersion,
+			Severity:           sev,
 			Title: firstNonEmpty(
 				toString(vuln["title"]),
 				toString(vuln["name"]),
@@ -127,7 +128,9 @@ func parseResult(data []byte, image scanners.ImageRef) (*scanners.ScanResult, er
 				toString(vuln["url"]),
 				toString(vuln["link"]),
 			),
-			Exploitable: toBool(vuln["exploitable"]),
+			Exploitable:        toBool(vuln["exploitable"]),
+			FixAvailable:       fixedVersion != "",
+			ScannerAttribution: "clair",
 		})
 	}
 

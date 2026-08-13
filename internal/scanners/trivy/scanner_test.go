@@ -61,6 +61,9 @@ func TestParseResult(t *testing.T) {
 	require.Equal(t, "CVE-2022-1234", result.Findings[0].CVE)
 	require.Equal(t, "openssl", result.Findings[0].Package)
 	require.Equal(t, scanners.SeverityHigh, result.Findings[0].Severity)
+	// Enrichment fields
+	require.True(t, result.Findings[0].FixAvailable)
+	require.Equal(t, "trivy", result.Findings[0].ScannerAttribution)
 }
 
 func TestParseResultEmpty(t *testing.T) {

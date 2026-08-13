@@ -76,6 +76,8 @@ func EventFromScanResult(result *scanners.ScanResult, workload WorkloadContext, 
 		detailsSummary = fmt.Sprintf("%d MEDIUM, %d LOW", summary.Medium, summary.Low)
 	}
 
+	fixableCount, exploitableCount := countRiskContext(result.Findings)
+
 	event := &Event{
 		EventType: eventType,
 		Summary:   eventSummary,
@@ -86,24 +88,26 @@ func EventFromScanResult(result *scanners.ScanResult, workload WorkloadContext, 
 			ServicesNames: []string{workload.Name},
 		},
 		Details: map[string]interface{}{
-			"cluster":         workload.ClusterName,
-			"namespace":       workload.Namespace,
-			"kind":            workload.Kind,
-			"serviceName":     workload.Name,
-			"container":       workload.Container,
-			"scanner":         result.Scanner,
-			"image":           result.Image.Resolved,
-			"digest":          result.Image.Digest,
-			"summary":         detailsSummary,
-			"critical":        summary.Critical,
-			"high":            summary.High,
-			"medium":          summary.Medium,
-			"low":             summary.Low,
-			"topFindings":     topFindings,
-			"reportURL":       result.ReportURL,
-			"scannedAt":       result.ScannedAt,
-			"totalFindings":   summary.Total(),
-			"minimumSeverity": opts.MinimumSeverity,
+			"cluster":          workload.ClusterName,
+			"namespace":        workload.Namespace,
+			"kind":             workload.Kind,
+			"serviceName":      workload.Name,
+			"container":        workload.Container,
+			"scanner":          result.Scanner,
+			"image":            result.Image.Resolved,
+			"digest":           result.Image.Digest,
+			"summary":          detailsSummary,
+			"critical":         summary.Critical,
+			"high":             summary.High,
+			"medium":           summary.Medium,
+			"low":              summary.Low,
+			"topFindings":      topFindings,
+			"reportURL":        result.ReportURL,
+			"scannedAt":        result.ScannedAt,
+			"totalFindings":    summary.Total(),
+			"minimumSeverity":  opts.MinimumSeverity,
+			"fixableFindings":  fixableCount,
+			"exploitableFindings": exploitableCount,
 		},
 	}
 
@@ -146,20 +150,40 @@ func hasRiskAtLevel(result *scanners.ScanResult, minRank int) bool {
 	return false
 }
 
+// topFindingsList returns the top CVE identifiers from findings ranked by actionability.
+//
+// Ranking strategy (deterministic, applied in order):
+//  1. Exploitable findings rank highest – they represent active risk.
+//  2. Higher severity ranks above lower severity.
+//  3. Findings with a fix available rank above those without – more immediately actionable.
+//  4. CVE ID ascending is used as a tiebreaker for reproducible output.
 func topFindingsList(findings []scanners.Finding, limit int) []string {
 	if limit <= 0 || len(findings) == 0 {
 		return nil
 	}
 
-	// Sort by severity, then by CVE ID
 	sorted := make([]scanners.Finding, len(findings))
 	copy(sorted, findings)
 	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].Severity.Rank() != sorted[j].Severity.Rank() {
-			return sorted[i].Severity.Rank() > sorted[j].Severity.Rank()
+		fi, fj := &sorted[i], &sorted[j]
+
+		// 1. Exploitable first
+		if fi.Exploitable != fj.Exploitable {
+			return fi.Exploitable
 		}
 
-		return sorted[i].CVE < sorted[j].CVE
+		// 2. Higher severity rank first
+		if fi.Severity.Rank() != fj.Severity.Rank() {
+			return fi.Severity.Rank() > fj.Severity.Rank()
+		}
+
+		// 3. Fix available (actionable) before no fix, within the same severity tier
+		if fi.FixAvailable != fj.FixAvailable {
+			return fi.FixAvailable
+		}
+
+		// 4. Alphabetical CVE for deterministic ordering
+		return fi.CVE < fj.CVE
 	})
 
 	var result []string
@@ -171,6 +195,21 @@ func topFindingsList(findings []scanners.Finding, limit int) []string {
 	}
 
 	return result
+}
+
+// countRiskContext returns the number of fixable and exploitable findings.
+func countRiskContext(findings []scanners.Finding) (fixable, exploitable int) {
+	for i := range findings {
+		if findings[i].FixAvailable {
+			fixable++
+		}
+
+		if findings[i].Exploitable {
+			exploitable++
+		}
+	}
+
+	return fixable, exploitable
 }
 
 func mapSeverityToEvent(summary scanners.VulnerabilitySummary) string {
