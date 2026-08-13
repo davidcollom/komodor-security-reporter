@@ -120,6 +120,10 @@ func parseResult(data []byte, image scanners.ImageRef) (*scanners.ScanResult, er
 			cve = id
 		}
 
+		fixedVersion := firstNonEmpty(
+			toString(vuln["fixedVersion"]),
+			toString(vuln["fixVersion"]),
+		)
 		result.Findings = append(result.Findings, scanners.Finding{
 			ID:  id,
 			CVE: cve,
@@ -132,10 +136,7 @@ func parseResult(data []byte, image scanners.ImageRef) (*scanners.ScanResult, er
 				toString(vuln["installedVersion"]),
 				toString(vuln["version"]),
 			),
-			Fixed: firstNonEmpty(
-				toString(vuln["fixedVersion"]),
-				toString(vuln["fixVersion"]),
-			),
+			Fixed:    fixedVersion,
 			Severity: sev,
 			Title: firstNonEmpty(
 				toString(vuln["title"]),
@@ -146,7 +147,9 @@ func parseResult(data []byte, image scanners.ImageRef) (*scanners.ScanResult, er
 				toString(vuln["url"]),
 				toString(vuln["link"]),
 			),
-			Exploitable: false,
+			Exploitable:        false,
+			FixAvailable:       fixedVersion != "",
+			ScannerAttribution: "wiz",
 		})
 	}
 

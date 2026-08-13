@@ -126,16 +126,19 @@ func parseResult(data []byte, image scanners.ImageRef) (*scanners.ScanResult, er
 			packageName = vuln.Name
 		}
 
+		fixedVersion := firstString(vuln.FixedIn)
 		result.Findings = append(result.Findings, scanners.Finding{
-			ID:          vuln.ID,
-			CVE:         firstIdentifier(vuln.Identifiers, "CVE"),
-			Package:     packageName,
-			Installed:   vuln.Version,
-			Fixed:       firstString(vuln.FixedIn),
-			Severity:    sev,
-			Title:       vuln.Title,
-			URL:         firstNonEmpty(vuln.URL, firstString(vuln.References)),
-			Exploitable: false,
+			ID:                 vuln.ID,
+			CVE:                firstIdentifier(vuln.Identifiers, "CVE"),
+			Package:            packageName,
+			Installed:          vuln.Version,
+			Fixed:              fixedVersion,
+			Severity:           sev,
+			Title:              vuln.Title,
+			URL:                firstNonEmpty(vuln.URL, firstString(vuln.References)),
+			Exploitable:        false,
+			FixAvailable:       fixedVersion != "",
+			ScannerAttribution: "snyk",
 		})
 	}
 

@@ -146,3 +146,79 @@ func TestTopFindingsList(t *testing.T) {
 	require.Equal(t, "CVE-2022-5678", top[0]) // Critical first
 	require.Equal(t, "CVE-2022-1234", top[1]) // Then High
 }
+
+func TestTopFindingsListExploitableFirst(t *testing.T) {
+	findings := []scanners.Finding{
+		{CVE: "CVE-2022-CRIT", Severity: scanners.SeverityCritical, Exploitable: false, FixAvailable: false},
+		{CVE: "CVE-2022-HIGH-EXPLOIT", Severity: scanners.SeverityHigh, Exploitable: true, FixAvailable: true},
+	}
+
+	top := topFindingsList(findings, 2)
+
+	require.Equal(t, 2, len(top))
+	// Exploitable ranks above critical-but-not-exploitable
+	require.Equal(t, "CVE-2022-HIGH-EXPLOIT", top[0])
+	require.Equal(t, "CVE-2022-CRIT", top[1])
+}
+
+func TestTopFindingsListFixableBeforeUnfixable(t *testing.T) {
+	// Within the same severity tier, fixable ranks above unfixable.
+	// Across severity tiers, severity wins: an unfixable critical ranks above a fixable high.
+	findings := []scanners.Finding{
+		{CVE: "CVE-2022-CRIT-NOFIX", Severity: scanners.SeverityCritical, FixAvailable: false},
+		{CVE: "CVE-2022-HIGH-FIX", Severity: scanners.SeverityHigh, FixAvailable: true},
+		{CVE: "CVE-2022-CRIT-FIX", Severity: scanners.SeverityCritical, FixAvailable: true},
+	}
+
+	top := topFindingsList(findings, 3)
+
+	require.Equal(t, 3, len(top))
+	// Fixable critical first
+	require.Equal(t, "CVE-2022-CRIT-FIX", top[0])
+	// Unfixable critical still above fixable high (severity wins across tiers)
+	require.Equal(t, "CVE-2022-CRIT-NOFIX", top[1])
+	require.Equal(t, "CVE-2022-HIGH-FIX", top[2])
+}
+
+func TestTopFindingsListDeterministicTiebreaker(t *testing.T) {
+	findings := []scanners.Finding{
+		{CVE: "CVE-2022-ZZZZ", Severity: scanners.SeverityCritical, FixAvailable: true},
+		{CVE: "CVE-2022-AAAA", Severity: scanners.SeverityCritical, FixAvailable: true},
+	}
+
+	top := topFindingsList(findings, 2)
+
+	require.Equal(t, 2, len(top))
+	require.Equal(t, "CVE-2022-AAAA", top[0])
+	require.Equal(t, "CVE-2022-ZZZZ", top[1])
+}
+
+func TestEventFromScanResultEnrichedFields(t *testing.T) {
+	result := &scanners.ScanResult{
+		Scanner: "trivy",
+		Image: scanners.ImageRef{
+			Resolved: "ghcr.io/acme/app@sha256:abc123",
+			Digest:   "sha256:abc123",
+		},
+		Summary: scanners.VulnerabilitySummary{
+			Critical: 1,
+			High:     1,
+		},
+		Findings: []scanners.Finding{
+			{CVE: "CVE-2026-0001", Severity: scanners.SeverityCritical, FixAvailable: true, Exploitable: false, ScannerAttribution: "trivy"},
+			{CVE: "CVE-2026-0002", Severity: scanners.SeverityHigh, FixAvailable: false, Exploitable: true, ScannerAttribution: "trivy"},
+		},
+	}
+
+	workload := WorkloadContext{
+		ClusterName: "prod",
+		Namespace:   "default",
+		Kind:        "Deployment",
+		Name:        "app",
+	}
+
+	event := EventFromScanResult(result, workload, EventOptions{IncludeTopFindings: 5})
+
+	require.Equal(t, 1, event.Details["fixableFindings"])
+	require.Equal(t, 1, event.Details["exploitableFindings"])
+}
