@@ -353,22 +353,17 @@ func (r *Reconciler) reconcileWorkload(ctx context.Context, namespace string, wl
 				r.metrics.ScanQueueWaitSeconds.Observe(waitDuration.Seconds())
 			}
 
-			if r.metrics != nil && r.metrics.ScansInFlight != nil {
-				r.metrics.ScansInFlight.Inc()
-			}
-
 			// Apply adaptive backpressure before dispatching the scan goroutine.
 			// A cancelled context causes Wait to return immediately with an error,
 			// so we treat that as a signal to stop dispatching.
 			if err := r.backpressure.Wait(ctx); err != nil {
 				scanWaitGroup.Done()
 				<-semaphore
-
-				if r.metrics != nil && r.metrics.ScansInFlight != nil {
-					r.metrics.ScansInFlight.Dec()
-				}
-
 				return fmt.Errorf("backpressure wait: %w", err)
+			}
+
+			if r.metrics != nil && r.metrics.ScansInFlight != nil {
+				r.metrics.ScansInFlight.Inc()
 			}
 
 			go r.runScannerForImage(
