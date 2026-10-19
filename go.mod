@@ -3,7 +3,7 @@ module github.com/davidcollom/komodor-security-reporter
 go 1.26.5
 
 require (
-	github.com/alicebob/miniredis/v2 v2.39.0
+	github.com/alicebob/miniredis/v2 v2.40.0
 	github.com/bombsimon/logrusr/v3 v3.1.0
 	github.com/bradfitz/gomemcache v0.0.0-20260422231931-4d751bb6e37c
 	github.com/eko/gocache/lib/v4 v4.4.0
